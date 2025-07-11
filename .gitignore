@@ -80,3 +80,5 @@ index.lock
 
 # individual user Rproj
 *.Rproj
+
+**/data/**
