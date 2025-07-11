@@ -221,7 +221,7 @@ if (download_data) {
 
   # note the overwrite argument does not work so clear out any existing
   # copies before running this
-  for (id in c( # "184", "186", "315",
+  for (id in c("184", "186", "315",
     "314", "185", "187"
   )) {
     # ask EDI to tell me what the most current version is
