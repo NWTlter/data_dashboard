@@ -266,7 +266,7 @@ snow_cens_2 <- snow_cens_2 %>%
 
 # run model, takes a while, should set up to use more cores at some point
 fit_cens_2 <- brm(y | cens(censored, snowmelt_c) ~ 1 + (1 | grid_pt) + (1 | year),
-                  data = snow_cens_2, iter = 20000)
+                  data = snow_cens_2, iter = 20000, cores = 4)
 
 saveRDS (fit_cens_2, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens_2.rds' )
 
