@@ -18,7 +18,7 @@ library(grid)
 library(gridExtra)
 library(gtable)
 library(ggplot2)
-library(trend)
+
 
 # only need to download once
 download_data <- FALSE
@@ -113,7 +113,8 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
 
   # Create main plot using tidy evaluation for dynamic y column
   p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
-    geom_point(alpha = 0.6, size = 1.5) +
+    #geom_point(alpha = 0.6, size = 1.5) +
+    geom_line(alpha = 0.3, size = 1) +
     geom_segment(
       data = trend_lines,
       aes(
@@ -271,7 +272,10 @@ ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.
   rename(site = local_site) %>%
   group_by(site, year, season) %>%
   summarize(tot_ppt = sum(precip), .groups = "drop") %>%
-  filter(!(site == "SDL" & year < 1990))
+  filter(!(site == "SDL")) #%>%
+  # drop sdl entirely from ppt it's not reliable enough even
+  # after this
+  #filter(!(site == "SDL" & year < 1990))
 
 temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
   guess_max = 100000
@@ -307,6 +311,8 @@ temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.dat
 
 # Calculate trends by site and season-------------------------------------------
 trend_results_ppt <- ppt_seasonal %>%
+  # drop sdl not reliable
+  #filter(site!= 'SDL') %>%
   group_by(site, season) %>%
   do(perform_trend_analysis(., value_col = "tot_ppt", year_col = "year")) %>%
   ungroup()
@@ -344,7 +350,7 @@ winter_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   plot_title = NULL, slope_units = "degC/yr"
 )
 
-summer_plot_temp <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer")
+summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer")
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter")
 
 
@@ -358,26 +364,29 @@ get_legend <- function(plot) {
   return(legend)
 }
 
-shared_legend <- get_legend(spring_plot_temp)
+shared_legend_temp <- get_legend(spring_plot_temp)
+shared_legend_ppt <- get_legend(summer_plot_ppt)
 
 
+jpeg('c1_d1_sdl_temp_ppt/figures/combined_plot_temp.jpg', width = 12, height = 10, units = 'in', res = 300)
+grid.arrange(winter_plot_temp + theme(legend.position = "none"),
+             spring_plot_temp + theme(legend.position = "none"),
+             summer_plot_temp + theme(legend.position = "none"),
+             fall_plot_temp + theme(legend.position = "none"),
+             shared_legend_temp,
+             ncol = 2, nrow = 3,
+             layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
+             heights = c(1, 1, 0.1)
+)
+dev.off()
+
+jpeg('c1_d1_sdl_temp_ppt/figures/combined_plot_ppt.jpg', width = 12, height = 6, units = 'in', res = 300)
 combined_plot_ppt <- grid.arrange(winter_plot_ppt + theme(legend.position = "none"),
-  summer_plot_ppt + theme(legend.position = "none"),
-  shared_legend,
-  ncol = 2, nrow = 2,
-  layout_matrix = rbind(c(1, 2), c(5, 5)),
-  heights = c(1, 0.1)
+                                  summer_plot_ppt + theme(legend.position = "none"),
+                                  shared_legend_ppt,
+                                  ncol = 2, nrow = 2,
+                                  layout_matrix = rbind(c(1, 2), c(5, 5)),
+                                  heights = c(1, 0.1)
 )
-
-
-combined_plot_temp <- grid.arrange(winter_plot_temp + theme(legend.position = "none"),
-  spring_plot_temp + theme(legend.position = "none"),
-  summer_plot_temp + theme(legend.position = "none"),
-  fall_plot_temp + theme(legend.position = "none"),
-  shared_legend,
-  ncol = 2, nrow = 3,
-  layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
-  heights = c(1, 1, 0.1)
-)
-
+dev.off()
 
