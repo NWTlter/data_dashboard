@@ -5,8 +5,7 @@
 # -- SETUP ------
 # clean environment, load needed libraries, modify default settings
 rm(list = ls())
-library(tidyverse)
-library(lubridate)
+
 options(stringsAsFactors = F)
 theme_set(theme_bw())
 na_vals <- c("NP", "NA", NA, "NaN", NaN, ".")
@@ -18,6 +17,8 @@ library(grid)
 library(gridExtra)
 library(gtable)
 library(ggplot2)
+library(lemon)
+library(ggthemes)
 
 
 # only need to download once
@@ -113,7 +114,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
 
   # Create main plot using tidy evaluation for dynamic y column
   p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
-    #geom_point(alpha = 0.6, size = 1.5) +
+    # geom_point(alpha = 0.6, size = 1.5) +
     geom_line(alpha = 0.3, size = 1) +
     geom_segment(
       data = trend_lines,
@@ -222,7 +223,8 @@ if (download_data) {
 
   # note the overwrite argument does not work so clear out any existing
   # copies before running this
-  for (id in c("184", "186", "315",
+  for (id in c(
+    "184", "186", "315",
     "314", "185", "187"
   )) {
     # ask EDI to tell me what the most current version is
@@ -272,10 +274,10 @@ ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.
   rename(site = local_site) %>%
   group_by(site, year, season) %>%
   summarize(tot_ppt = sum(precip), .groups = "drop") %>%
-  filter(!(site == "SDL")) #%>%
-  # drop sdl entirely from ppt it's not reliable enough even
-  # after this
-  #filter(!(site == "SDL" & year < 1990))
+  filter(!(site == "SDL")) # %>%
+# drop sdl entirely from ppt it's not reliable enough even
+# after this
+# filter(!(site == "SDL" & year < 1990))
 
 temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
   guess_max = 100000
@@ -312,7 +314,7 @@ temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.dat
 # Calculate trends by site and season-------------------------------------------
 trend_results_ppt <- ppt_seasonal %>%
   # drop sdl not reliable
-  #filter(site!= 'SDL') %>%
+  # filter(site!= 'SDL') %>%
   group_by(site, season) %>%
   do(perform_trend_analysis(., value_col = "tot_ppt", year_col = "year")) %>%
   ungroup()
@@ -368,25 +370,186 @@ shared_legend_temp <- get_legend(spring_plot_temp)
 shared_legend_ppt <- get_legend(summer_plot_ppt)
 
 
-jpeg('c1_d1_sdl_temp_ppt/figures/combined_plot_temp.jpg', width = 12, height = 10, units = 'in', res = 300)
+jpeg("c1_d1_sdl_temp_ppt/figures/combined_plot_temp.jpg", width = 12, height = 10, units = "in", res = 300)
 grid.arrange(winter_plot_temp + theme(legend.position = "none"),
-             spring_plot_temp + theme(legend.position = "none"),
-             summer_plot_temp + theme(legend.position = "none"),
-             fall_plot_temp + theme(legend.position = "none"),
-             shared_legend_temp,
-             ncol = 2, nrow = 3,
-             layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
-             heights = c(1, 1, 0.1)
+  spring_plot_temp + theme(legend.position = "none"),
+  summer_plot_temp + theme(legend.position = "none"),
+  fall_plot_temp + theme(legend.position = "none"),
+  shared_legend_temp,
+  ncol = 2, nrow = 3,
+  layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
+  heights = c(1, 1, 0.1)
 )
 dev.off()
 
-jpeg('c1_d1_sdl_temp_ppt/figures/combined_plot_ppt.jpg', width = 12, height = 6, units = 'in', res = 300)
+jpeg("c1_d1_sdl_temp_ppt/figures/combined_plot_ppt.jpg", width = 12, height = 6, units = "in", res = 300)
 combined_plot_ppt <- grid.arrange(winter_plot_ppt + theme(legend.position = "none"),
-                                  summer_plot_ppt + theme(legend.position = "none"),
-                                  shared_legend_ppt,
-                                  ncol = 2, nrow = 2,
-                                  layout_matrix = rbind(c(1, 2), c(5, 5)),
-                                  heights = c(1, 0.1)
+  summer_plot_ppt + theme(legend.position = "none"),
+  shared_legend_ppt,
+  ncol = 2, nrow = 2,
+  layout_matrix = rbind(c(1, 2), c(5, 5)),
+  heights = c(1, 0.1)
 )
 dev.off()
 
+# Summer temp simple plot ------------------------------------------------------
+# create the thiel sen slope segments
+trend_segments <- trend_results_temp %>%
+  mutate(
+    # Create significance flag for line types
+    significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
+    # Handle cases where significance is NA
+    significant = ifelse(is.na(significant), "Insufficient data", significant)
+  ) %>%
+  group_by(site, season) %>%
+  filter(!is.na(ts_slope) & !is.na(ts_intercept)) %>%
+  inner_join(temp_seasonal %>% filter(season == "summer"),
+    by = c("site", "season")
+  ) %>%
+  summarize(
+    min_year = min(year, na.rm = TRUE),
+    max_year = max(year, na.rm = TRUE),
+    ts_slope = first(ts_slope),
+    ts_intercept = first(ts_intercept),
+    significant = first(significant),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    y_start = ts_intercept + ts_slope * min_year,
+    y_end = ts_intercept + ts_slope * max_year
+  )
+
+# simpler plots
+
+
+###
+slope_data <- trend_results_temp %>%
+  filter(site %in% c("C1", "D1") & season %in% c("summer"))
+
+# Create labels with slope values
+c1_slope <- slope_data$ts_slope[slope_data$site == "C1"]
+d1_slope <- slope_data$ts_slope[slope_data$site == "D1"]
+
+legend_labels <- c(
+  "C1" = paste0("Subalpine +", round(c1_slope, 3), " °C per year"),
+  "D1" = paste0("Tundra + ", round(d1_slope, 3), " °C per year")
+)
+
+
+c1_d1_temps <- ggplot(
+  temp_seasonal %>% filter(site %in% c("C1", "D1") &
+    season %in% c("summer")),
+  aes(x = year, y = mean_temp, color = site)
+) +
+  geom_point() +
+  geom_line() +
+  geom_segment(
+    data = trend_segments %>%
+      filter(site %in% c("C1", "D1") &
+        season %in% c("summer") &
+        significant == "Significant"),
+    aes(
+      x = min_year, y = y_start,
+      xend = max_year, yend = y_end,
+      color = site
+    ),
+    size = 1.2
+  ) +
+  scale_color_manual(
+    values = c("C1" = "red", "D1" = "blue"),
+    labels = legend_labels,
+    name = NULL
+  ) +
+  labs(
+    title = "Summer mean temperature on Niwot Ridge by biome",
+    x = "Year",
+    y = "Temperature (°C)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = c(1, 0),
+    legend.justification = c(1, 0),
+    legend.background = element_rect(fill = "white", color = "black", size = 0.5),
+    legend.margin = margin(6, 6, 6, 6)
+  )
+
+ggsave(c1_d1_temps,
+  filename = "c1_d1_sdl_temp_ppt/figures/c1_d1_summer_mean_temp.jpg",
+  width = 12, height = 8, units = "in", dpi = 300,
+  scale = 0.5
+)
+
+# Anomaly plots ----------------------------------------------------------------
+# temp
+anom_temp_season <- temp_seasonal %>%
+  group_by(site, season) %>%
+  mutate(
+    mean_temp_season = mean(mean_temp, na.rm = TRUE),
+  ) %>%
+  ungroup() %>%
+  mutate(
+    anom_temp = mean_temp - mean_temp_season,
+    posneg = ifelse(anom_temp > 0, "pos", "neg") %>%
+      factor(c("pos", "neg"))
+  )
+
+
+# ppt
+anom_ppt_season <- ppt_seasonal %>%
+  group_by(site, season) %>%
+  mutate(
+    mean_ppt_season = mean(tot_ppt, na.rm = TRUE),
+  ) %>%
+  ungroup() %>%
+  mutate(
+    anom_ppt = tot_ppt/mean_ppt_season,
+    anom_ppt = (tot_ppt * 100 / mean_ppt_season) - 100,
+    posneg = ifelse(anom_ppt > 1, "pos", "neg") %>%
+      factor(c("pos", "neg"))
+  )
+
+anom_ppt_D1 <- ggplot(anom_ppt_season %>%
+               ungroup() %>%
+               mutate(
+                 season =
+                   fct_relevel(
+                     season, "summer",
+                     "winter"
+                   )
+               ), aes(x = year, y = anom_ppt)) +
+  geom_col(aes(fill = posneg)) +
+  scale_fill_manual(values = c("#034e7b", "#99000d")) +
+  labs(y = "Seasonal precipitation anomaly (%)", x = "") +
+  scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(wetter %<->% drier))) +
+  theme_hc() +
+  theme(legend.position = "none") +
+  facet_wrap(~season)
+
+ggsave(anom_ppt_D1,
+       file = "c1_d1_sdl_temp_ppt/figures/d1_ppt_anom_by_season.png",
+       scale = 0.5, width = 8, height = 6
+)
+
+## temp
+anom_temp_D1 <- ggplot(anom_temp_season %>%
+  filter(site == "D1") %>%
+  ungroup() %>%
+  mutate(
+    season =
+      fct_relevel(
+        season, "spring", "summer",
+        "fall", "winter"
+      )
+  ), aes(x = year, y = anom_temp)) +
+  geom_col(aes(fill = posneg)) +
+  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  labs(y = "Seasonal temperature anomaly (°C)", x = "") +
+  scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(hotter %<->% colder))) +
+  theme_hc() +
+  theme(legend.position = "none") +
+  facet_wrap(~season)
+
+ggsave(anom_temp_D1,
+  filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_by_season.png",
+  scale = 0.5, width = 8, height = 8
+)
