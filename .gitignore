@@ -81,8 +81,9 @@ index.lock
 # individual user Rproj
 *.Rproj
 
-# downloaded data from EDI
+# downloaded data from EDI/NOAA
 **/data/**
 
 # Big bayesian files
 **/big_bayesian_files/**
+
