@@ -42,8 +42,8 @@ data_dashboard/
 │       └── snowmelt_est_adj.csv      # Estimated snowmelt dates with adjustments
 │
 └── sdl_veg/                          # Vegetation composition analysis for Saddle site
-    └── NWT_LTER_Saddle_Composition.R # Comprehensive vegetation community analysis including
-                                      # diversity, composition changes, and ordination analysis
+    └── figures/                         # Vegetation analysis plots
+        ├── sdl_veg.jpg              # Growth form cover anomalies by year
 ```
 
 ## Project Overview
@@ -54,7 +54,7 @@ This repository contains data analysis scripts and visualizations for the Niwot 
 - **Snow dynamics**: Winter snow accumulation, melt timing, and trends
 - **Atmospheric composition**: CO2 measurements from NOAA Global Monitoring Laboratory
 - **Soil conditions**: Soil moisture patterns
-- **Vegetation**: Plant community composition and diversity changes
+- **Vegetation**: Plant community composition changes by growth form
 
 Each analysis folder contains:
 - **R scripts**: Data processing, analysis, and visualization code
