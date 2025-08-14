@@ -1,6 +1,6 @@
 # plot sdl spp comp by growth form
 # SCE 10 Jan 2022
-# updated 14 Jan 2025
+# updated 14 Aug 2025
 
 # Credit for basic workflow for downloading/top subsetting/cleaning from
 # M Oldfather script
