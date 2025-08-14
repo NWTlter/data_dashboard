@@ -8,10 +8,8 @@
 # -- SETUP -----
 # clean up enviro, read in needed libraries
 rm(list = ls())
-# library(readxl)
 library(tidyverse)
 library(svglite)
-# library(vegan)
 options(stringsAsFactors = F)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
@@ -43,7 +41,7 @@ if (download_data) {
     read_data_package_archive(packageID, path = "sdl_veg/data")
     print(read_data_package_citation(packageID))
     
-    #[1] "Walker, M., H. Humphries, and Niwot Ridge LTER. 2025. Plant species composition data for Saddle grid, 1989 - ongoing. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/1427abaa317306bd0524046c0276b708. Accessed 2025-08-14."
+    # "Walker, M., H. Humphries, and Niwot Ridge LTER. 2025. Plant species composition data for Saddle grid, 1989 - ongoing. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/1427abaa317306bd0524046c0276b708. Accessed 2025-08-14."
     # "Smith, J., H. Humphries, M. Walker, and Niwot Ridge LTER. 2025. Plant species list for Niwot Ridge and Green Lakes Valley, 1970 - ongoing. ver 3. Environmental Data Initiative. https://doi.org/10.6073/pasta/e96e1b8ce6d356154fb3a85eab96a106. Accessed 2025-08-14."
   }
 
