@@ -1,10 +1,12 @@
 # plot c1/d1 ppt trends by quarter
 # and/or by winter/summer
-# SCE 11 July 2025
+# and/or annual
+# Updated 22 Aug 2025
 
 # -- SETUP ------
-# clean environment, load needed libraries, modify default settings
+# Clean environment
 rm(list = ls())
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE) 
 
 options(stringsAsFactors = F)
 
@@ -40,7 +42,8 @@ perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year
       ts_intercept = NA
     ))
   }
-  data <- data %>% arrange(year_col)
+  # Ensure data is sorted by year before trend analysis
+  data <- data %>% arrange(!!sym(year_col))
   # Mann-Kendall test
   mk_test <- mk.test(data[[value_col]])
 
@@ -311,6 +314,26 @@ temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.dat
   group_by(site, year, season) %>%
   summarize(mean_temp = mean(mean_temp, na.rm = FALSE), .groups = "drop")
 
+# Create annual aggregations for D1 site ---------------------------------------
+ppt_annual_d1 <- ppt_seasonal %>%
+  filter(site == "D1") %>%
+  group_by(site, year) %>%
+  summarize(tot_ppt = sum(tot_ppt, na.rm = TRUE), .groups = "drop")
+
+# Recalculate annual temperature from daily data to account for different season lengths
+temp_annual_d1 <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
+  guess_max = 100000
+) %>%
+  mutate(
+    month = lubridate::month(date),
+    year = lubridate::year(date),
+    mean_temp = (min_temp + max_temp) / 2
+  ) %>%
+  rename(site = local_site) %>%
+  filter(site == "D1") %>%
+  group_by(site, year) %>%
+  summarize(mean_temp = mean(mean_temp, na.rm = TRUE), .groups = "drop")
+
 # Calculate trends by site and season-------------------------------------------
 trend_results_ppt <- ppt_seasonal %>%
   # drop sdl not reliable
@@ -324,36 +347,49 @@ trend_results_temp <- temp_seasonal %>%
   do(perform_trend_analysis(., value_col = "mean_temp", year_col = "year")) %>%
   ungroup()
 
+# Calculate annual trends for D1 site ------------------------------------------
+trend_results_ppt_annual_d1 <- ppt_annual_d1 %>%
+  do(perform_trend_analysis(., value_col = "tot_ppt", year_col = "year")) %>%
+  mutate(site = "D1", season = "annual")
+
+trend_results_temp_annual_d1 <- temp_annual_d1 %>%
+  do(perform_trend_analysis(., value_col = "mean_temp", year_col = "year")) %>%
+  mutate(site = "D1", season = "annual")
+
 # Calculate trends by site and season-------------------------------------------
 # Generate individual plots
-summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer")
-winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter")
+summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer", 
+                                        plot_title = "Summer\n(Jun-Aug)")
+winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
+                                        plot_title = "Winter\n(Sep-May)")
 
 summer_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "summer",
   y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = NULL, slope_units = "degC/yr"
+  plot_title = "Summer\n(Jun-Aug)", slope_units = "degC/yr"
 )
 spring_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "spring",
   y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = NULL, slope_units = "degC/yr"
+  plot_title = "Spring\n(Mar-May)", slope_units = "degC/yr"
 )
 
 fall_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "fall",
   y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = NULL, slope_units = "degC/yr"
+  plot_title = "Fall\n(Sep-Nov)", slope_units = "degC/yr"
 )
 
 winter_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "winter",
   y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = NULL, slope_units = "degC/yr"
+  plot_title = "Winter\n(Dec-Feb)", slope_units = "degC/yr"
 )
 
-summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer")
-winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter")
+summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer",
+                                        plot_title = "Summer\n(Jun-Aug)")
+winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
+                                        plot_title = "Winter\n(Sep-May)")
 
 
 # combined plots ---------------------------------------------------------------
@@ -502,14 +538,15 @@ anom_ppt_season <- ppt_seasonal %>%
   ) %>%
   ungroup() %>%
   mutate(
-    anom_ppt = tot_ppt/mean_ppt_season,
-    anom_ppt = (tot_ppt * 100 / mean_ppt_season) - 100,
+    # anom_ppt = tot_ppt/mean_ppt_season,
+    anom_ppt = (tot_ppt - mean_ppt_season) / mean_ppt_season * 100,
     posneg = ifelse(anom_ppt > 1, "pos", "neg") %>%
       factor(c("pos", "neg"))
   )
 
 anom_ppt_D1 <- ggplot(anom_ppt_season %>%
                ungroup() %>%
+                 filter(site == 'D1') %>%
                mutate(
                  season =
                    fct_relevel(
@@ -520,10 +557,13 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("#034e7b", "#99000d")) +
   labs(y = "Seasonal precipitation anomaly (%)", x = "") +
-  scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(wetter %<->% drier))) +
+  scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
-  theme(legend.position = "none") +
-  facet_wrap(~season)
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 8)
+  ) +
+  facet_wrap(~season, labeller = labeller(season = c("summer" = "Summer (Jun-Aug)", "winter" = "Winter (Sep-May)")))
 
 ggsave(anom_ppt_D1,
        file = "c1_d1_sdl_temp_ppt/figures/d1_ppt_anom_by_season.png",
@@ -544,12 +584,77 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("#99000d", "#034e7b")) +
   labs(y = "Seasonal temperature anomaly (°C)", x = "") +
-  scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(hotter %<->% colder))) +
+  scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
   theme_hc() +
-  theme(legend.position = "none") +
-  facet_wrap(~season)
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 8)
+  ) +
+  facet_wrap(~season, labeller = labeller(season = c("spring" = "Spring (Mar-May)", "summer" = "Summer (Jun-Aug)", "fall" = "Fall (Sep-Nov)", "winter" = "Winter (Dec-Feb)")))
 
 ggsave(anom_temp_D1,
   filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_by_season.png",
   scale = 0.5, width = 8, height = 8
+)
+
+# Annual anomaly plots for D1 site ---------------------------------------------
+# Create annual anomaly data for temperature
+anom_temp_annual_d1 <- temp_annual_d1 %>%
+  mutate(
+    mean_temp_overall = mean(mean_temp, na.rm = TRUE),
+    anom_temp = mean_temp - mean_temp_overall,
+    posneg = ifelse(anom_temp > 0, "pos", "neg") %>%
+      factor(c("pos", "neg"))
+  )
+
+# Create annual anomaly data for precipitation
+anom_ppt_annual_d1 <- ppt_annual_d1 %>%
+  mutate(
+    mean_ppt_overall = mean(tot_ppt, na.rm = TRUE),
+    anom_ppt = (tot_ppt - mean_ppt_overall) / mean_ppt_overall * 100,
+    posneg = ifelse(anom_ppt > 0, "pos", "neg") %>%
+      factor(c("pos", "neg"))
+  )
+
+# Annual temperature anomaly plot for D1
+anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_temp)) +
+  geom_col(aes(fill = posneg)) +
+  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  labs(
+    # title = "Annual Temperature Anomalies - D1 Site",
+    y = "Annual temperature anomaly (°C)", 
+    x = "Year"
+  ) +
+  scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
+  theme_hc() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Annual precipitation anomaly plot for D1
+anom_ppt_annual_d1_plot <- ggplot(anom_ppt_annual_d1, aes(x = year, y = anom_ppt)) +
+  geom_col(aes(fill = posneg)) +
+  scale_fill_manual(values = c("neg" = "#034e7b", "pos" = "#99000d")) +
+  labs(
+    y = "Annual precipitation anomaly (%)",
+    x = "Year"
+  ) +
+  scale_y_symmetric(sec.axis = sec_axis(trans = "identity", breaks = NULL,
+    name = expression(wetter %<->% drier))) +
+  theme_hc() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Save annual anomaly plots
+ggsave(anom_temp_annual_d1_plot,
+  filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_annual.png",
+  scale = 0.5, width = 8, height = 6
+)
+
+ggsave(anom_ppt_annual_d1_plot,
+  filename = "c1_d1_sdl_temp_ppt/figures/d1_ppt_anom_annual.png",
+  scale = 0.5, width = 8, height = 6
 )
