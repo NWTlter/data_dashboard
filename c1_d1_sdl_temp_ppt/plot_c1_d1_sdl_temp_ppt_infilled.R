@@ -7,7 +7,7 @@
 rm(list = ls())
 
 options(stringsAsFactors = F)
-theme_set(theme_bw())
+
 na_vals <- c("NP", "NA", NA, "NaN", NaN, ".")
 
 library(tidyverse)
@@ -19,7 +19,7 @@ library(gtable)
 library(ggplot2)
 library(lemon)
 library(ggthemes)
-
+theme_set(theme_bw())
 
 # only need to download once
 download_data <- FALSE
