@@ -20,13 +20,15 @@ library(geomtextpath)
 library(ggrepel)
 library(directlabels)
 library(here)
- 
+
 # code to get most recent saddle data (not currently working)
 #source("utility_functions/utility_functions_all.R")
 #data_file <-getTabular(93)
 
 # read in community data file
-data_file <- read_csv(here("data", "saddptqd.hh.data.csv"))
+data_file <- read_csv(file.path("sdl_veg", "data", "saddptqd.hh.data.csv"))
+
+write.csv(data_file, file.path("sdl_veg", "figures", "mypretendfigures.csv"))
 
 head(data_file)
 dim(data_file) # 239864, 10

@@ -563,7 +563,7 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
     legend.position = "none",
     strip.text = element_text(size = 8)
   ) +
-  facet_wrap(~season, labeller = labeller(season = c("summer" = "Summer (Jun-Aug)", "winter" = "Winter (Sep-May)")))
+  facet_wrap(~season, labeller = labeller(season = c("summer" = "Jun-Aug", "winter" = "Sep-May")))
 
 ggsave(anom_ppt_D1,
        file = "c1_d1_sdl_temp_ppt/figures/d1_ppt_anom_by_season.png",
