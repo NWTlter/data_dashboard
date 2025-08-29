@@ -359,9 +359,9 @@ trend_results_temp_annual_d1 <- temp_annual_d1 %>%
 # Calculate trends by site and season-------------------------------------------
 # Generate individual plots
 summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer", 
-                                        plot_title = "Summer\n(Jun-Aug)")
+                                        plot_title = "Jun-Aug")
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
-                                        plot_title = "Winter\n(Sep-May)")
+                                        plot_title = "Sep-May")
 
 summer_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "summer",
@@ -387,9 +387,9 @@ winter_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
 )
 
 summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer",
-                                        plot_title = "Summer\n(Jun-Aug)")
+                                        plot_title = "Jun-Aug")
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
-                                        plot_title = "Winter\n(Sep-May)")
+                                        plot_title = "Sep-May")
 
 
 # combined plots ---------------------------------------------------------------

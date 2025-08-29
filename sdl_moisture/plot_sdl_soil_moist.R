@@ -1,25 +1,14 @@
 # Script to plot sdl (nwt package id 405) soil moisture
 # temp patterns
 
-## TO DO
-# currently reads from current version of saddle met on the nwt servers,
-# this works fine but is bad for reproducibility. At some point
-# update to read directly from EML
-
 library(tidyverse)
 library(ggthemes)
 library(lemon)
 
-# just need to run once to install the pkg
-#
-
-#remotes::install_github("flr/ggplotFL")
-library(ggplotFL)
-
 rm(list = ls())
 
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
 
 # download data -----------------------------------------------------------
 # note if you have already downloaded SOME data the read_data_package_archive
@@ -113,7 +102,7 @@ g1 <- ggplot(summer_moist, aes(x = year, y = anom_moist)) +
   scale_fill_manual(values = c("#034e7b", "#99000d")) +
   # labs(y = expression(atop(paste("Distribution of node ages, ",
   #                                 italic(gamma)))))
-  labs(y = "Summer soil moisture anomaly (%)", x = "") +
+  labs(y = "Soil moisture anomaly (%) \n Jun-Aug", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
   theme(legend.position = "none")
