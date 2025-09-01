@@ -555,7 +555,7 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
                    )
                ), aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#034e7b", "#99000d")) +
+  scale_fill_manual(values = c('pos' = "#034e7b",'neg'= "#99000d")) +
   labs(y = "Seasonal precipitation anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
@@ -582,7 +582,7 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
       )
   ), aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  scale_fill_manual(values = c('pos' = "#99000d", 'neg' = "#034e7b")) +
   labs(y = "Seasonal temperature anomaly (°C)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
   theme_hc() +
@@ -619,7 +619,7 @@ anom_ppt_annual_d1 <- ppt_annual_d1 %>%
 # Annual temperature anomaly plot for D1
 anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  scale_fill_manual(values = c('pos' = "#99000d", 'neg' = "#034e7b")) +
   labs(
     # title = "Annual Temperature Anomalies - D1 Site",
     y = "Annual temperature anomaly (°C)", 
@@ -635,7 +635,7 @@ anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_t
 # Annual precipitation anomaly plot for D1
 anom_ppt_annual_d1_plot <- ggplot(anom_ppt_annual_d1, aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("neg" = "#034e7b", "pos" = "#99000d")) +
+  scale_fill_manual(values = c("pos" = "#034e7b", "neg" = "#99000d")) +
   labs(
     y = "Annual precipitation anomaly (%)",
     x = "Year"
