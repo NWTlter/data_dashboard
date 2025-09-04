@@ -55,7 +55,9 @@ g1 <- ggplot(
     color = "red", size = 0.001, alpha = 0.2
   ) +
   geom_line(size = 0.1, alpha = 1) +
-  ylab(bquote(CO[2] ~ (ppm))) +
+  ylab(bquote(CO[2] ~ (mu * mol ~ mol^{
+    -1
+  }))) +
   theme_classic() +
   theme(axis.text = element_text(size = 12)) +
   scale_x_date(
