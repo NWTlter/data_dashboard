@@ -221,6 +221,10 @@ if (download_data) {
   # 314 is sdl temp
   # 185 is c1 temp
   # 187 is d1 temp
+  
+  if(!dir.exists("c1_d1_sdl_temp_ppt/data")){
+    dir.create("c1_d1_sdl_temp_ppt/data")
+  }
 
   scope <- "knb-lter-nwt" # Niwot scope
 
