@@ -24,7 +24,7 @@ library(ggthemes)
 theme_set(theme_bw())
 
 # only need to download once
-download_data <- FALSE
+download_data <- TRUE
 
 # functions -----------------------------------------------------------
 
@@ -221,7 +221,11 @@ if (download_data) {
   # 314 is sdl temp
   # 185 is c1 temp
   # 187 is d1 temp
-
+  
+  data_dir <- file.path("c1_d1_sdl_temp_ppt", "data")
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
   scope <- "knb-lter-nwt" # Niwot scope
 
   # note the overwrite argument does not work so clear out any existing
@@ -237,7 +241,7 @@ if (download_data) {
     packageID <- paste(scope, id, revision, sep = ".")
 
     # download the data
-    read_data_package_archive(packageID, path = "c1_d1_sdl_temp_ppt/data")
+    read_data_package_archive(packageID, path = data_dir)
     print(read_data_package_citation(packageID))
   }
 
@@ -250,19 +254,19 @@ if (download_data) {
   # [1] "Kittel, T., C. White, M. Hartman, K. Chowanski, T. Ackerman, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily air temperature data for D1 chart recorder, 1952 - ongoing. ver 5. Environmental Data Initiative. https://doi.org/10.6073/pasta/b05689181c21ac40d35b6c1c01e2f8a5. Accessed 2025-07-11."
   # unzip all zip files in the directory
   # overwrites the manifests but don't really need them.
-  for (fname in list.files("c1_d1_sdl_temp_ppt/data",
+  for (fname in list.files(data_dir,
     pattern = "knb-lter.*zip",
     full.names = TRUE
   )) {
-    unzip(zipfile = fname, exdir = "c1_d1_sdl_temp_ppt/data/")
+    unzip(zipfile = fname, exdir = data_dir)
   }
 }
 
 # read and munge ppt and temp --------------------------------------------------
 
-ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.data.csv") %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_precip_daily.tk.data.csv")) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/c1_infilled_precip_daily.tk.data.csv")) %>%
+ppt_seasonal <- read_csv(file.path( data_dir, "sdl_daily_precip_gapfilled.cw.data.csv")) %>%
+  bind_rows(., read_csv(file.path( data_dir, "d1_infilled_precip_daily.tk.data.csv"))) %>%
+  bind_rows(., read_csv(file.path( data_dir, "c1_infilled_precip_daily.tk.data.csv"))) %>%
   mutate(
     month = lubridate::month(date),
     year = lubridate::year(date)
@@ -282,13 +286,13 @@ ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.
 # after this
 # filter(!(site == "SDL" & year < 1990))
 
-temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
+temp_seasonal <- read_csv(file.path( data_dir, "d1_infilled_temp_daily.tk.data.csv"),
   guess_max = 100000
 ) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/c1_infilled_temp_daily.tk.data.csv",
+  bind_rows(., read_csv(file.path( data_dir, "c1_infilled_temp_daily.tk.data.csv"),
     guess_max = 100000
   )) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_airtemp_gapfilled.cw.data.csv",
+  bind_rows(., read_csv(file.path( data_dir, "sdl_daily_airtemp_gapfilled.cw.data.csv"),
     guess_max = 100000
   ) %>%
     rename(
@@ -321,7 +325,7 @@ ppt_annual_d1 <- ppt_seasonal %>%
   summarize(tot_ppt = sum(tot_ppt, na.rm = TRUE), .groups = "drop")
 
 # Recalculate annual temperature from daily data to account for different season lengths
-temp_annual_d1 <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
+temp_annual_d1 <- read_csv(file.path( file.path( data_dir, "d1_infilled_temp_daily.tk.data.csv")),
   guess_max = 100000
 ) %>%
   mutate(
