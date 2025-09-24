@@ -1,25 +1,33 @@
 # Script to plot sdl (nwt package id 405) soil moisture
 # temp patterns
 
-## TO DO
-# currently reads from current version of saddle met on the nwt servers,
-# this works fine but is bad for reproducibility. At some point
-# update to read directly from EML
-
 library(tidyverse)
 library(ggthemes)
 library(lemon)
-
-# just need to run once to install the pkg
-#
-
-#remotes::install_github("flr/ggplotFL")
-library(ggplotFL)
+library(officer)
+library(magrittr)
 
 rm(list = ls())
 
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
+
+
+# User-specified notes for PowerPoint slides
+# slide g1 - no dynamic text edit directly
+slide_notes_g1 <- "This figure below illustrates how summer soil moisture (June-August) deviates from average across the Niwot Ridge alpine tundra soil moisture record. Data are from an alpine dry meadow located on the Saddle of Niwot Ridge."
+
+# Define text for slide notes g2
+# dynamic text, the years will be inserted later
+slide_notes_g2_text <- list(
+  "Current year soil moisture compared to historical patterns. The ribbon shows the 10th-90th percentile range of historical data (",
+  # min(df$year), "-", max(df$year)-1,
+  "), providing context for evaluating whether conditions in ",
+  # max(df$year),
+  " are within normal ranges."
+)
+
+citation_text <- "Morse, J. and M. Losleben. 2025. Climate data for saddle data loggers (CR23X and CR1000), 2000 - ongoing, daily. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/b01aea637f7608f0a1b2895ae474d571. Accessed 2025-08-11."
 
 # download data -----------------------------------------------------------
 # note if you have already downloaded SOME data the read_data_package_archive
@@ -29,7 +37,7 @@ if (download_data) {
   # download the data from EDI
   # 405 is sdl temp
   scope <- "knb-lter-nwt" # Niwot scope
-  
+
   # note the overwrite argument does not work so clear out any existing
   # copies before running this
   for (id in c(
@@ -37,21 +45,21 @@ if (download_data) {
   )) {
     # ask EDI to tell me what the most current version is
     revision <- list_data_package_revisions(scope, id, filter = "newest")
-    
+
     # display current version - > this is referred to as the "packageID"
     packageID <- paste(scope, id, revision, sep = ".")
-    
+
     # download the data
     read_data_package_archive(packageID, path = "sdl_moisture/data")
     print(read_data_package_citation(packageID))
   }
-  
+
   # update the below so you remember to cite it correctly
   # "Morse, J. and M. Losleben. 2025. Climate data for saddle data loggers (CR23X and CR1000), 2000 - ongoing, daily. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/b01aea637f7608f0a1b2895ae474d571. Accessed 2025-08-11."
   # overwrites the manifests but don't really need them.
   for (fname in list.files("sdl_moisture/data",
-                           pattern = "knb-lter.*zip",
-                           full.names = TRUE
+    pattern = "knb-lter.*zip",
+    full.names = TRUE
   )) {
     unzip(zipfile = fname, exdir = "sdl_moisture/data/")
   }
@@ -111,15 +119,13 @@ summer_moist <- df %>%
 g1 <- ggplot(summer_moist, aes(x = year, y = anom_moist)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("#034e7b", "#99000d")) +
-  # labs(y = expression(atop(paste("Distribution of node ages, ",
-  #                                 italic(gamma)))))
-  labs(y = "Summer soil moisture anomaly (%)", x = "") +
+  labs(y = "Soil moisture anomaly (%) \n Jun-Aug", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
   theme(legend.position = "none")
 
 ggsave(g1,
-  file = "sdl_moisture/figures/soil_moist_anom.png",
+  file = "sdl_moisture/figures/sdl_soil_moist_anom.png",
   scale = 0.5, width = 8, height = 6
 )
 
@@ -138,40 +144,93 @@ byday <- df %>%
     q10 = quantile(soilmoist_5cm_avg, 0.1, na.rm = TRUE),
     q50 = quantile(soilmoist_5cm_avg, 0.5, na.rm = TRUE),
     q90 = quantile(soilmoist_5cm_avg, 0.9, na.rm = TRUE),
-    .groups = 'drop'
+    .groups = "drop"
   )
 
-fill_legend <- paste0("10th-90th percentile \n","(",
-       min(df$year),"-",
-       max(df$year)-1, ")")
+fill_legend <- paste0(
+  "10th-90th percentile \n", "(",
+  min(df$year), "-",
+  max(df$year) - 1, ")"
+)
 
 g2 <- ggplot(summer_moist_last_yr %>%
   ungroup(), aes(x = yday)) +
-  geom_line(aes(y=soilmoist_5cm_avg,
-                color = as.character(year)))+
-  geom_ribbon(data = byday, 
-              aes(x = yday, ymin = q10, ymax = q90, 
-                  fill = fill_legend), 
-              alpha = 0.3)+
+  geom_line(aes(
+    y = soilmoist_5cm_avg,
+    color = as.character(year)
+  )) +
+  geom_ribbon(
+    data = byday,
+    aes(
+      x = yday, ymin = q10, ymax = q90,
+      fill = fill_legend
+    ),
+    alpha = 0.3
+  ) +
   scale_x_continuous(
-    breaks = c(121, 152, 182, 213, 244),  # May 1, June 1, July 1, Aug 1, Sep 1 (approx)
+    breaks = c(121, 152, 182, 213, 244), # May 1, June 1, July 1, Aug 1, Sep 1 (approx)
     labels = c("May 1", "Jun 1", "Jul 1", "Aug 1", "Sep 1")
   ) +
   scale_color_manual(
     name = NULL,
     values = setNames("black", as.character(unique(summer_moist_last_yr$year)))
-  )+
+  ) +
   scale_fill_manual(
     name = NULL,
     values = setNames("pink", fill_legend)
-  )+
-  ylab('Soil moisture (%)')+
-  xlab(NULL)+
+  ) +
+  ylab("Soil moisture (%)") +
+  xlab(NULL) +
   theme_hc()
 
-  
+
 ggsave(g2,
-  file = "sdl_moisture/figures/sdl_soil_moisture_anom.png",
+  file = "sdl_moisture/figures/sdl_soil_moist_last_year.png",
   scale = 0.5, width = 8, height = 6
 )
 
+
+# Create first PowerPoint presentation for g1
+ppt1 <- read_pptx() %>%
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  # ph_with(value = "SDL Soil Moisture Analysis", location = ph_location_type(type = "title")) %>%
+  ph_with(
+    value = external_img("sdl_moisture/figures/sdl_soil_moist_anom.png"),
+    location = ph_location(left = 1, top = 0.5, width = 8, height = 5.5)
+  ) %>%
+  ph_with(
+    value = fpar(
+      ftext("Saddle (SDL) Data: ", prop = fp_text(bold = TRUE, font.size = 12, font.family = "sans")),
+      ftext(citation_text, prop = fp_text(font.size = 12, font.family = "sans"))
+    ),
+    location = ph_location(left = 0.5, top = 6.5, width = 9, height = 1)
+  ) %>%
+  set_notes(value = slide_notes_g1, location = notes_location_type(type = "body"))
+
+# Define slide_notes_g2 after df is loaded
+slide_notes_g2 <- paste0(slide_notes_g2_text[[1]], min(df$year), "-", max(df$year) - 1, slide_notes_g2_text[[2]], max(df$year), slide_notes_g2_text[[3]])
+
+# Create second PowerPoint presentation for g2
+ppt2 <- read_pptx() %>%
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  # ph_with(value = "Current Year Soil Moisture Patterns", location = ph_location_type(type = "title")) %>%
+  ph_with(
+    value = external_img("sdl_moisture/figures/sdl_soil_moist_last_year.png"),
+    location = ph_location(left = 1, top = 0.5, width = 8, height = 5.5)
+  ) %>%
+  ph_with(
+    value = fpar(
+      ftext("Saddle (SDL) Data: ", prop = fp_text(bold = TRUE, font.size = 12, font.family = "sans")),
+      ftext(citation_text, prop = fp_text(font.size = 12, font.family = "sans"))
+    ),
+    location = ph_location(left = 0.5, top = 6.5, width = 9, height = 1)
+  ) %>%
+  set_notes(value = slide_notes_g2, location = notes_location_type(type = "body"))
+
+# Save both PowerPoint presentations
+print(ppt1, target = "sdl_moisture/figures/sdl_soil_mois_anom.pptx")
+print(ppt2, target = "sdl_moisture/figures/sdl_soil_moist_last_year.pptx")
+
+cat("PowerPoint presentations saved to:\n")
+cat("  - sdl_moisture/figures/sdl_soil_moisture_anomaly_analysis.pptx\n")
+cat("  - sdl_moisture/figures/sdl_soil_moisture_patterns.pptx\n")
