@@ -9,6 +9,10 @@ library(magrittr)
 
 rm(list = ls())
 
+# Define directory paths for cross-platform compatibility
+data_dir <- file.path("sdl_moisture", "data")
+figures_dir <- file.path("sdl_moisture", "figures")
+
 # only need to download once
 download_data <- FALSE
 
@@ -50,24 +54,24 @@ if (download_data) {
     packageID <- paste(scope, id, revision, sep = ".")
 
     # download the data
-    read_data_package_archive(packageID, path = "sdl_moisture/data")
+    read_data_package_archive(packageID, path = data_dir)
     print(read_data_package_citation(packageID))
   }
 
   # update the below so you remember to cite it correctly
   # "Morse, J. and M. Losleben. 2025. Climate data for saddle data loggers (CR23X and CR1000), 2000 - ongoing, daily. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/b01aea637f7608f0a1b2895ae474d571. Accessed 2025-08-11."
   # overwrites the manifests but don't really need them.
-  for (fname in list.files("sdl_moisture/data",
+  for (fname in list.files(data_dir,
     pattern = "knb-lter.*zip",
     full.names = TRUE
   )) {
-    unzip(zipfile = fname, exdir = "sdl_moisture/data/")
+    unzip(zipfile = fname, exdir = data_dir)
   }
 }
 
 # read and munge ppt and temp --------------------------------------------------
 
-df <- read.csv("sdl_moisture/data/sdlcr23x-cr1000.daily.ml.data.csv",
+df <- read.csv(file.path(data_dir, "sdlcr23x-cr1000.daily.ml.data.csv"),
   na.strings = "NaN"
 )
 
@@ -94,7 +98,7 @@ df <- df %>%
     soilmoist_5cm_avg = zoo::na.approx(soilmoist_5cm_avg, maxgap = 10, rule = 2)
   ) %>%
   # for gs chai calcs if we want to do those
-  mutate(tmin = (soiltemp_5cm_min - -2) / (5 - -2)) %>%
+  mutate(tmin = (soiltemp_5cm_min + 2) / (5 + 2)) %>%
   mutate(tmin = ifelse(tmin < 0, 0, tmin)) %>%
   mutate(tmin = ifelse(tmin > 1, 1, tmin)) %>%
   mutate(mmin = (soilmoist_5cm_avg - 0.05) / (.15 - 0.05)) %>%
@@ -125,7 +129,7 @@ g1 <- ggplot(summer_moist, aes(x = year, y = anom_moist)) +
   theme(legend.position = "none")
 
 ggsave(g1,
-  file = "sdl_moisture/figures/sdl_soil_moist_anom.png",
+  file = file.path(figures_dir, "sdl_soil_moist_anom.png"),
   scale = 0.5, width = 8, height = 6
 )
 
@@ -185,7 +189,7 @@ g2 <- ggplot(summer_moist_last_yr %>%
 
 
 ggsave(g2,
-  file = "sdl_moisture/figures/sdl_soil_moist_last_year.png",
+  file = file.path(figures_dir, "sdl_soil_moist_last_year.png"),
   scale = 0.5, width = 8, height = 6
 )
 
@@ -195,7 +199,7 @@ ppt1 <- read_pptx() %>%
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
   # ph_with(value = "SDL Soil Moisture Analysis", location = ph_location_type(type = "title")) %>%
   ph_with(
-    value = external_img("sdl_moisture/figures/sdl_soil_moist_anom.png"),
+    value = external_img(file.path(figures_dir, "sdl_soil_moist_anom.png")),
     location = ph_location(left = 1, top = 0.5, width = 8, height = 5.5)
   ) %>%
   ph_with(
@@ -215,7 +219,7 @@ ppt2 <- read_pptx() %>%
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
   # ph_with(value = "Current Year Soil Moisture Patterns", location = ph_location_type(type = "title")) %>%
   ph_with(
-    value = external_img("sdl_moisture/figures/sdl_soil_moist_last_year.png"),
+    value = external_img(file.path(figures_dir, "sdl_soil_moist_last_year.png")),
     location = ph_location(left = 1, top = 0.5, width = 8, height = 5.5)
   ) %>%
   ph_with(
@@ -228,9 +232,9 @@ ppt2 <- read_pptx() %>%
   set_notes(value = slide_notes_g2, location = notes_location_type(type = "body"))
 
 # Save both PowerPoint presentations
-print(ppt1, target = "sdl_moisture/figures/sdl_soil_mois_anom.pptx")
-print(ppt2, target = "sdl_moisture/figures/sdl_soil_moist_last_year.pptx")
+print(ppt1, target = file.path(figures_dir, "sdl_soil_mois_anom.pptx"))
+print(ppt2, target = file.path(figures_dir, "sdl_soil_moist_last_year.pptx"))
 
 cat("PowerPoint presentations saved to:\n")
-cat("  - sdl_moisture/figures/sdl_soil_moisture_anomaly_analysis.pptx\n")
-cat("  - sdl_moisture/figures/sdl_soil_moisture_patterns.pptx\n")
+cat("  -", file.path(figures_dir, "sdl_soil_mois_anom.pptx"), "\n")
+cat("  -", file.path(figures_dir, "sdl_soil_moist_last_year.pptx"), "\n")
