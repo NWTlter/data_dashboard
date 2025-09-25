@@ -27,6 +27,11 @@ if (download_data) {
   # download the data from EDI
   # 31 is sdl snow
   
+  data_dir <- file.path("sdl_snow", "data")
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
+  
   scope <- "knb-lter-nwt" # Niwot scope
   
   # note the overwrite argument does not work so clear out any existing
@@ -39,14 +44,14 @@ if (download_data) {
     packageID <- paste(scope, id, revision, sep = ".")
     
     # download the data
-    read_data_package_archive(packageID, path = "sdl_snow/data")
+    read_data_package_archive(packageID, path = data_dir)
     print(read_data_package_citation(packageID))
   }
   
   # update the below so you remember to cite it correctly
   # [1] "Walker, D., J. Morse, and Niwot Ridge LTER. 2024. Snow depth data for Saddle grid, 1992 - ongoing. ver 21. Environmental Data Initiative. https://doi.org/10.6073/pasta/54fd300090a4859ad3083805e98bc823. Accessed 2025-07-11."
   # overwrites the manifests but don't really need them.
-  for (fname in list.files("sdl_snow/data",
+  for (fname in list.files(data_dir,
                            pattern = "knb-lter.*zip",
                            full.names = TRUE
   )) {
@@ -55,13 +60,12 @@ if (download_data) {
 }
 
 
-#Read data####-----------------------------------------------------------------
+#Read in data####-----------------------------------------------------------------
 
+# Bring in snow data
+snow <- read_csv(file.path( data_dir, "saddsnow.dw.data.csv"))
 
-# bring in snow data
-snow <- read_csv("sdl_snow/data/saddsnow.dw.data.csv")
-
-# seems like they skipped one meas in a few years, but before/after was 0
+# Seems as though they skipped one meas in a few years, but before/after was 0
 #in that grid so assume it's still 0
 
 snow <- snow %>%
@@ -83,14 +87,14 @@ snow <- snow %>%
     month = month(date),
     doy = yday (date),
     season = ifelse(doy > 240, "fall", "spring"),
-    # at the moment we're not using depth as an absolute
-    # so can ignore the deeper than pole uncertainties
+    # At the moment we're not using depth as an absolute
+    # so we can ignore the "deeper than pole" uncertainties
     mean_depth = as.numeric(gsub('\\+', '', mean_depth))
   )
 
 
 
-#Calc melt dates####------------------------------------------------------------
+#Calculate melt dates####------------------------------------------------------------
 last_snow_covered <- snow %>%
   filter(mean_depth > 0 & !is.na(mean_depth) & season == "spring") %>%
   group_by(year, point_ID) %>%
@@ -102,20 +106,20 @@ first_melt <- snow %>%
   group_by(year, point_ID) %>%
   summarize(snowmelt = min(doy), .groups = "drop")
 
-#some strong outliers - unclear
-# whether they really had no snow then or
-# just the sampling skipped them
-# also not totally clear what the biological meaning 
-# of those very early meltout dates are
-# as it definitely did snow some after that
-# just didn't stick around to be sampled
+# There are some strong outliers - It is unclear
+# whether these points really had no snow then or
+# the sampling skipped them. 
+# It is also not clear what the biological meaning 
+# of very early melt dates are; 
+# these points did receive snow after the melt date,
+# but this snow did not stick around long enough to be sampled
 hist (first_melt$snowmelt)
 
-# some are 0 by the time people arrive in a year,
-# add those as right censored at 0
-# this is probably not actually the case that there
-# was never snow, more likely it was intermittent and they
-# never arrived at a time of any snow not blown off
+# Some are 0 by the time sampling people arrive in a year,
+# add those as right censored at 0.
+# It is probably not actually the case that there
+# was never snow. It is more likely that snow was intermittent, and samplers
+# never arrived at a time when snow had not blown off.
 
 no_snow <- snow %>%
   filter(season == "spring") %>%
@@ -126,7 +130,7 @@ no_snow <- snow %>%
               group_by(year, point_ID) %>%
               summarize(start_samp = min(doy)))
 
-# last sample not snowfree
+# Last sample not snowfree
 no_snowfree <- snow %>%
   filter(season == "spring") %>%
   group_by(year, point_ID) %>%
@@ -156,9 +160,9 @@ snow_cens <- last_snow_covered %>%
   filter(year > 1992) 
 
 
-#other option is to reset the very early days to sometime
-#between 75 and 105 (this is something like mid-march - mid april)
-# this is the approach we will take here
+# Another option is to reset the very early days to sometime
+# between 75 and 105 (this is something like mid-march - mid april).
+# This is the approach we will take here:
 snow_cens_2 <- last_snow_covered %>%
   full_join(., first_melt) %>%
   full_join(., (snow %>%
@@ -185,14 +189,13 @@ snow_cens_2 <- last_snow_covered %>%
 if (run_bayesian_models){
 
 # The censoring variable
-# (named censored in this example) should contain the values 'left', 'none',
-#' right', and 'interval' (or equivalently -1, 0, 1, and 2)
+# (named "censored" in this example) should contain the values 'left', 'none',
+#' right', and 'interval' (or equivalently -1, 0, 1, and 2).
 #'
-#' bc I can never remeber which is which - looked up
+#' Because I can never remember which is which - 
 #' #Left censoring is when the event of interest has already occurred before
-# enrolment. This is very rarely encountered. Truncation is deliberate and
+# enrollment. This is very rarely encountered. Truncation is deliberate and
 # due to study design.
-
 
 # center to make modeling happy
 mn <- mean(c(snow_cens$snowmelt, snow_cens$last_snow), na.rm = TRUE)
@@ -216,7 +219,7 @@ snow_cens <- snow_cens %>%
   ) %>%
   # for how brms wants the censored data coded
   mutate(y = ifelse(censored == "left", snowmelt_c, last_snow_c)) %>%
-  # For technical reasony, y2 needs to be specified for all observations
+  # For technical reasons, y2 needs to be specified for all observations
   # even if they are unused, for left and none, for instance.
   # In the future brms will be better at selectively checking whether variables
   # are actually used in a specific case but this is hard. So for now:
@@ -230,10 +233,11 @@ fit_cens <- brm(y | cens(censored, snowmelt_c) ~ 1 + (1 | grid_pt) + (1 | year),
                 data = snow_cens, iter = 20000, cores = 4
 )
 
-saveRDS (fit_cens, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens.rds' )
+saveRDS (fit_cens, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens.rds' ) 
+#I think we need to update this using file.path, but I don't want to mess this up.
 
 
-# center to make modeling happy
+# Center to make modeling happy
 mn_2 <- mean(c(snow_cens_2$snowmelt_adj, snow_cens_2$last_snow_adj), na.rm = TRUE)
 sd_2 <- sd(c(snow_cens_2$snowmelt_adj, snow_cens_2$last_snow_adj), na.rm = TRUE)
 
@@ -255,16 +259,16 @@ snow_cens_2 <- snow_cens_2 %>%
   ) %>%
   # for how brms wants the censored data coded
   mutate(y = ifelse(censored == "left", snowmelt_c, last_snow_c)) %>%
-  # For technical reasony, y2 needs to be specified for all observations
+  # For technical reasons, y2 needs to be specified for all observations
   # even if they are unused, for left and none, for instance.
-  # In the future brms will be better at selectively checking whether variables
+  # In the future, brms will be better at selectively checking whether variables
   # are actually used in a specific case but this is hard. So for now:
-  # Any variable that you use in your data should be non NA for all observation
+  # Any variable that you use in your data should be non NA for all observations
   # you want to include, even if some of the values are actually unused in the model.
   # https://github.com/paul-buerkner/brms/issues/799
   mutate(snowmelt_c = ifelse(censored == "right", 999, snowmelt_c))
 
-# run model, takes a while, should set up to use more cores at some point
+# Run model (this takes a while; we should set this up to use more cores at some point)
 fit_cens_2 <- brm(y | cens(censored, snowmelt_c) ~ 1 + (1 | grid_pt) + (1 | year),
                   data = snow_cens_2, iter = 20000, cores = 4)
 
@@ -272,10 +276,11 @@ saveRDS (fit_cens_2, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens_2.rds' )
 
 }
 
-# read in the bayesian model results and continue ------------------------------
+# Read in the bayesian model results and continue ------------------------------
 fit_cens_2 <-readRDS('sdl_snow/big_bayesian_files/fit_cens_snow_cens_2.rds')
+#The above also needs to be updated to use file.path(), I think
 
-# predictions
+# Predictions
 pp_2 <- predict(fit_cens_2, newdata = snow_cens_2)
 
 pp_2 <- pp_2 %>%
@@ -292,8 +297,8 @@ ggplot(pp_2, aes(x = last_snow_adj, y = Estimate)) +
   geom_point() +
   geom_abline()
 
-# seems like it works ok but some predicted values outside real range
-# basically hard to predict the very blowy offy sites
+# This seems to work ok, but some predicted values fall outside the real range.
+# Basically, it is hard to predict the very windblown sites.
 ggplot(pp_2, aes(
   x = Estimate, ymin = last_snow_adj, ymax = snowmelt_adj,
   color = year
@@ -301,7 +306,7 @@ ggplot(pp_2, aes(
   geom_linerange() +
   geom_abline()
 
-# solution - 
+# Solution - 
 # Use estimate at face value if in bounds, otherwise, take bounds
 
 pp_2 <- pp_2 %>%
@@ -321,3 +326,4 @@ write.csv(pp_2 %>%
             select(year, grid_pt,last_snow_adj, snowmelt_adj, snowmelt_est, Estimate, Est.Error, Q2.5, Q97.5),
           file = 'sdl_snow/data_deriv/snowmelt_est_adj.csv',
           row.names = FALSE)
+# We may need to update to file path here too. 

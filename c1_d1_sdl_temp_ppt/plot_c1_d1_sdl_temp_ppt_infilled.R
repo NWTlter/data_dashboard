@@ -1,7 +1,7 @@
 # plot c1/d1 ppt trends by quarter
 # and/or by winter/summer
 # and/or annual
-# Updated 22 Aug 2025
+# Updated 24 Sept 2025
 
 # -- SETUP ------
 # Clean environment
@@ -161,7 +161,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       display_text = paste0(slope_round, significance)
     )
 
-  # Create inset grob with dynamic slope units
+  # Create inset Grid Graphical Object (grob) with dynamic slope units
   inset_data <- data.frame(
     Site = slope_data$site,
     stringsAsFactors = FALSE
@@ -210,9 +210,9 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
 
 
 # download data -----------------------------------------------------------
-# note if you have already downloaded SOME data the read_data_package_archive
-# function will bork as it doesn't want to overwrite, so clear your /data
-# directories and then rerun
+# Note: if you have already downloaded SOME data, the read_data_package_archive
+# function will not work as it does not want to overwrite. Clear your /data
+# directories and then return to run the following code.
 if (download_data) {
   # download the data from EDI
   # 184 is c1 ppt
@@ -222,51 +222,52 @@ if (download_data) {
   # 185 is c1 temp
   # 187 is d1 temp
   
-  if(!dir.exists("c1_d1_sdl_temp_ppt/data")){
-    dir.create("c1_d1_sdl_temp_ppt/data")
+  data_dir <- file.path("c1_d1_sdl_temp_ppt", "data")
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
   }
 
   scope <- "knb-lter-nwt" # Niwot scope
 
-  # note the overwrite argument does not work so clear out any existing
+  # Note: the overwrite argument does not work, so clear out any existing
   # copies before running this
   for (id in c(
     "184", "186", "315",
     "314", "185", "187"
   )) {
-    # ask EDI to tell me what the most current version is
+    # Ask EDI to tell me what the most current version is
     revision <- list_data_package_revisions(scope, id, filter = "newest")
 
-    # display current version - > this is referred to as the "packageID"
+    # Display current version - > this is referred to as the "packageID"
     packageID <- paste(scope, id, revision, sep = ".")
 
-    # download the data
-    read_data_package_archive(packageID, path = "c1_d1_sdl_temp_ppt/data")
+    # Download the data
+    read_data_package_archive(packageID, path = data_dir)
     print(read_data_package_citation(packageID))
   }
 
-  # update the below so you remember to cite it correctly
+  # Update the below so you remember to cite the data correctly
   # [1] "Kittel, T., C. White, M. Hartman, K. Chowanski, T. Ackerman, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily precipitation data for C1 chart recorder, 1952 - ongoing. ver 8. Environmental Data Initiative. https://doi.org/10.6073/pasta/5f896d7d1eb19649ee2ff9fca7166160. Accessed 2025-07-09."
   # [1] "Kittel, T., C. White, M. Hartman, K. Chowanski, T. Ackerman, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily precipitation data for D1 chart recorder, 1952 - ongoing. ver 6. Environmental Data Initiative. https://doi.org/10.6073/pasta/02b125f7d0dc87a6d40e6ca7001471ce. Accessed 2025-07-09."
   # [1] "White, C., J. Morse, K. Chowanski, T. Kittel, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily precipitation data for Saddle, 1981 - ongoing. ver 4. Environmental Data Initiative. https://doi.org/10.6073/pasta/8caa444276521b797e4a16485dc0e137. Accessed 2025-07-11."
   # [1] "White, C., J. Morse, H. Brandes, K. Chowanski, T. Kittel, M. Losleben, and M. Moore. 2025. Homogenized, gap-filled, daily air temperature data for Saddle, 1986 - ongoing. ver 4. Environmental Data Initiative. https://doi.org/10.6073/pasta/49a2171ec028c4ddef298752bc9ebe8d. Accessed 2025-07-11."
   # [1] "Kittel, T., C. White, M. Hartman, K. Chowanski, T. Ackerman, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily air temperature data for C1 chart recorder, 1952 - ongoing. ver 5. Environmental Data Initiative. https://doi.org/10.6073/pasta/0b4f8747ea72258e46681bb511c262f3. Accessed 2025-07-11."
   # [1] "Kittel, T., C. White, M. Hartman, K. Chowanski, T. Ackerman, M. Williams, M. Losleben, and M. Moore. 2025. Infilled daily air temperature data for D1 chart recorder, 1952 - ongoing. ver 5. Environmental Data Initiative. https://doi.org/10.6073/pasta/b05689181c21ac40d35b6c1c01e2f8a5. Accessed 2025-07-11."
-  # unzip all zip files in the directory
-  # overwrites the manifests but don't really need them.
-  for (fname in list.files("c1_d1_sdl_temp_ppt/data",
+  # Unzip all zip files in the directory
+  # This overwrites the manifests, but you don't really need them.
+  for (fname in list.files(data_dir,
     pattern = "knb-lter.*zip",
     full.names = TRUE
   )) {
-    unzip(zipfile = fname, exdir = "c1_d1_sdl_temp_ppt/data/")
+    unzip(zipfile = fname, exdir = data_dir)
   }
 }
 
-# read and munge ppt and temp --------------------------------------------------
+# Read and merge ppt and temp datasets --------------------------------------------------
 
-ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.data.csv") %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_precip_daily.tk.data.csv")) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/c1_infilled_precip_daily.tk.data.csv")) %>%
+ppt_seasonal <- read_csv(file.path( data_dir, "sdl_daily_precip_gapfilled.cw.data.csv")) %>%
+  bind_rows(., read_csv(file.path( data_dir, "d1_infilled_precip_daily.tk.data.csv"))) %>%
+  bind_rows(., read_csv(file.path( data_dir, "c1_infilled_precip_daily.tk.data.csv"))) %>%
   mutate(
     month = lubridate::month(date),
     year = lubridate::year(date)
@@ -282,17 +283,17 @@ ppt_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_precip_gapfilled.cw.
   group_by(site, year, season) %>%
   summarize(tot_ppt = sum(precip), .groups = "drop") %>%
   filter(!(site == "SDL")) # %>%
-# drop sdl entirely from ppt it's not reliable enough even
-# after this
+# We have dropped sdl entirely from ppt because it's not reliable enough even
+# after this:
 # filter(!(site == "SDL" & year < 1990))
 
-temp_seasonal <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
+temp_seasonal <- read_csv(file.path( data_dir, "d1_infilled_temp_daily.tk.data.csv"),
   guess_max = 100000
 ) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/c1_infilled_temp_daily.tk.data.csv",
+  bind_rows(., read_csv(file.path( data_dir, "c1_infilled_temp_daily.tk.data.csv"),
     guess_max = 100000
   )) %>%
-  bind_rows(., read_csv("c1_d1_sdl_temp_ppt/data/sdl_daily_airtemp_gapfilled.cw.data.csv",
+  bind_rows(., read_csv(file.path( data_dir, "sdl_daily_airtemp_gapfilled.cw.data.csv"),
     guess_max = 100000
   ) %>%
     rename(
@@ -325,7 +326,7 @@ ppt_annual_d1 <- ppt_seasonal %>%
   summarize(tot_ppt = sum(tot_ppt, na.rm = TRUE), .groups = "drop")
 
 # Recalculate annual temperature from daily data to account for different season lengths
-temp_annual_d1 <- read_csv("c1_d1_sdl_temp_ppt/data/d1_infilled_temp_daily.tk.data.csv",
+temp_annual_d1 <- read_csv(file.path( file.path( data_dir, "d1_infilled_temp_daily.tk.data.csv")),
   guess_max = 100000
 ) %>%
   mutate(
@@ -400,7 +401,7 @@ winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter
 )
 
 
-# combined plots ---------------------------------------------------------------
+# Combined plots ---------------------------------------------------------------
 
 # Extract legend from one plot
 get_legend <- function(plot) {
@@ -524,7 +525,9 @@ ggsave(c1_d1_temps,
 )
 
 # Anomaly plots ----------------------------------------------------------------
-# temp
+
+# Seasonal Anomalies for D1 Precipitation and Temperature------------
+# Create seasonal anomaly data for temperature
 anom_temp_season <- temp_seasonal %>%
   group_by(site, season) %>%
   mutate(
@@ -537,8 +540,7 @@ anom_temp_season <- temp_seasonal %>%
       factor(c("pos", "neg"))
   )
 
-
-# ppt
+# Create seasonal anomaly data for precipitation
 anom_ppt_season <- ppt_seasonal %>%
   group_by(site, season) %>%
   mutate(
@@ -552,6 +554,34 @@ anom_ppt_season <- ppt_seasonal %>%
       factor(c("pos", "neg"))
   )
 
+#Create seasonal anomaly plot for temperature
+anom_temp_D1 <- ggplot(anom_temp_season %>%
+                         filter(site == "D1") %>%
+                         ungroup() %>%
+                         mutate(
+                           season =
+                             fct_relevel(
+                               season, "spring", "summer",
+                               "fall", "winter"
+                             )
+                         ), aes(x = year, y = anom_temp)) +
+  geom_col(aes(fill = posneg)) +
+  scale_fill_manual(values = c("pos" = "#99000d", "neg" = "#034e7b")) +
+  labs(y = "Seasonal temperature anomaly (°C)", x = "") +
+  scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
+  theme_hc() +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 8)
+  ) +
+  facet_wrap(~season, labeller = labeller(season = c("spring" = "Spring (Mar-May)", "summer" = "Summer (Jun-Aug)", "fall" = "Fall (Sep-Nov)", "winter" = "Winter (Dec-Feb)")))
+
+ggsave(anom_temp_D1,
+       filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_by_season.png",
+       scale = 0.5, width = 8, height = 8
+)
+
+#Create seasonal anomaly plot for precipitation
 anom_ppt_D1 <- ggplot(anom_ppt_season %>%
   ungroup() %>%
   filter(site == "D1") %>%
@@ -578,34 +608,9 @@ ggsave(anom_ppt_D1,
   scale = 0.5, width = 8, height = 6
 )
 
-## temp
-anom_temp_D1 <- ggplot(anom_temp_season %>%
-  filter(site == "D1") %>%
-  ungroup() %>%
-  mutate(
-    season =
-      fct_relevel(
-        season, "spring", "summer",
-        "fall", "winter"
-      )
-  ), aes(x = year, y = anom_temp)) +
-  geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("pos" = "#99000d", "neg" = "#034e7b")) +
-  labs(y = "Seasonal temperature anomaly (°C)", x = "") +
-  scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
-  theme_hc() +
-  theme(
-    legend.position = "none",
-    strip.text = element_text(size = 8)
-  ) +
-  facet_wrap(~season, labeller = labeller(season = c("spring" = "Spring (Mar-May)", "summer" = "Summer (Jun-Aug)", "fall" = "Fall (Sep-Nov)", "winter" = "Winter (Dec-Feb)")))
 
-ggsave(anom_temp_D1,
-  filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_by_season.png",
-  scale = 0.5, width = 8, height = 8
-)
+# Annual anomaly plots for D1 precipitation and temperature ---------------------------------------------
 
-# Annual anomaly plots for D1 site ---------------------------------------------
 # Create annual anomaly data for temperature
 anom_temp_annual_d1 <- temp_annual_d1 %>%
   mutate(
@@ -624,7 +629,7 @@ anom_ppt_annual_d1 <- ppt_annual_d1 %>%
       factor(c("pos", "neg"))
   )
 
-# Annual temperature anomaly plot for D1
+# Create annual temperature anomaly plot for D1
 anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("pos" = "#99000d", "neg" = "#034e7b")) +
@@ -640,7 +645,7 @@ anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_t
     plot.title = element_text(hjust = 0.5)
   )
 
-# Annual precipitation anomaly plot for D1
+# Create annual precipitation anomaly plot for D1
 anom_ppt_annual_d1_plot <- ggplot(anom_ppt_annual_d1, aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("pos" = "#034e7b", "neg" = "#99000d")) +
