@@ -1,7 +1,7 @@
-# plot c1/d1 ppt trends by quarter
+# Script to download and plot c1/d1 air temp and ppt trends by quarter
 # and/or by winter/summer
 # and/or annual
-# Updated 24 Sept 2025
+# Updated 21 Nov 2025
 
 # -- SETUP ------
 # Clean environment
