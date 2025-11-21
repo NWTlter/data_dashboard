@@ -1,5 +1,5 @@
-# Script to plot sdl (nwt package id 405) soil moisture
-# temp patterns
+# Script to download and plot Saddle (nwt package id 405) soil moisture
+# temporal patterns
 
 library(tidyverse)
 library(ggthemes)
