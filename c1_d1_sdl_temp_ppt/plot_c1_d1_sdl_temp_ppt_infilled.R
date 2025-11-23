@@ -22,192 +22,10 @@ library(ggplot2)
 library(lemon)
 library(ggthemes)
 theme_set(theme_bw())
+library(viridisLite) #for color-blind accessibility
 
 # only need to download once
-download_data <- FALSE
-
-# functions -----------------------------------------------------------
-
-# define function to perform
-perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year") {
-  # Remove any missing values
-  clean_data <- data[!is.na(data[[value_col]]), ]
-
-  if (nrow(clean_data) < 3) {
-    return(data.frame(
-      mk_tau = NA,
-      mk_pvalue = NA,
-      mk_trend = "insufficient data",
-      ts_slope = NA,
-      ts_intercept = NA
-    ))
-  }
-  # Ensure data is sorted by year before trend analysis
-  data <- data %>% arrange(!!sym(year_col))
-  # Mann-Kendall test
-  mk_test <- mk.test(data[[value_col]])
-
-  # Theil-Sen slope
-  ts_test <- as.numeric(sens.slope(data[[value_col]])$estimates)
-
-  # Calculate intercept
-  intercepts <- data[[value_col]] - ts_test * data[[year_col]]
-  sens_intercept <- median(intercepts)
-
-  # Determine trend direction
-  trend_direction <- case_when(
-    mk_test$p.value > 0.05 ~ "no trend",
-    mk_test$statistic > 0 ~ "increasing",
-    mk_test$statistic < 0 ~ "decreasing",
-    TRUE ~ "no trend"
-  )
-
-  return(data.frame(
-    mk_tau = as.numeric(mk_test$statistic),
-    mk_pvalue = as.numeric(mk_test$p.value),
-    mk_trend = trend_direction,
-    ts_slope = ts_test,
-    ts_intercept = sens_intercept
-  ))
-}
-
-# Create plot for a specific season with all sites
-create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
-                                 y_col = "tot_ppt", y_label = "Precipitation (mm)",
-                                 plot_title = NULL, slope_units = "mm/yr") {
-  # Filter data for the target season
-  plot_data <- seasonal_data %>%
-    filter(season == target_season) %>%
-    left_join(trend_results %>% filter(season == target_season),
-      by = c("site", "season")
-    ) %>%
-    mutate(
-      # Create significance flag for line types
-      significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
-      # Handle cases where significance is NA
-      significant = ifelse(is.na(significant), "Insufficient data", significant)
-    )
-
-  # Define colors for sites (you may need to adjust these based on your sites)
-  n_sites <- length(unique(plot_data$site))
-  site_colors <- rainbow(n_sites)
-  names(site_colors) <- unique(plot_data$site)
-
-  # Calculate trend lines for each site's data range
-  trend_lines <- plot_data %>%
-    group_by(site) %>%
-    filter(!is.na(ts_slope) & !is.na(ts_intercept)) %>%
-    summarize(
-      min_year = min(year, na.rm = TRUE),
-      max_year = max(year, na.rm = TRUE),
-      ts_slope = first(ts_slope),
-      ts_intercept = first(ts_intercept),
-      significant = first(significant),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      y_start = ts_intercept + ts_slope * min_year,
-      y_end = ts_intercept + ts_slope * max_year
-    )
-
-  # Create the plot title
-  if (is.null(plot_title)) {
-    plot_title <- paste(stringr::str_to_title(target_season), "Trends by Site")
-  }
-
-  # Create main plot using tidy evaluation for dynamic y column
-  p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
-    # geom_point(alpha = 0.6, size = 1.5) +
-    geom_line(alpha = 0.3, size = 1) +
-    geom_segment(
-      data = trend_lines,
-      aes(
-        x = min_year, y = y_start,
-        xend = max_year, yend = y_end,
-        color = site, linetype = significant
-      ),
-      size = 1.2
-    ) +
-    scale_color_manual(values = site_colors, name = "Site") +
-    scale_linetype_manual(
-      values = c(
-        "Significant" = "solid",
-        "Non-significant" = "dashed",
-        "Insufficient data" = "dotted"
-      ),
-      name = "Mann-Kendall\nSignificance"
-    ) +
-    ggtitle(plot_title) +
-    ylab(y_label) +
-    xlab("Year") +
-    theme_classic() +
-    theme(
-      legend.position = "bottom",
-      legend.box = "horizontal",
-      plot.title = element_text(size = 14, face = "bold"),
-      axis.title = element_text(size = 12),
-      axis.text = element_text(size = 10)
-    ) +
-    guides(color = guide_legend(override.aes = list(linetype = "solid")))
-
-  # Create inset table with slope information
-  slope_data <- plot_data %>%
-    select(site, ts_slope, mk_pvalue, mk_trend) %>%
-    distinct() %>%
-    mutate(
-      slope_round = round(ts_slope, 3),
-      p_round = round(mk_pvalue, 3),
-      significance = ifelse(mk_pvalue < 0.05, "*", ""),
-      display_text = paste0(slope_round, significance)
-    )
-
-  # Create inset Grid Graphical Object (grob) with dynamic slope units
-  inset_data <- data.frame(
-    Site = slope_data$site,
-    stringsAsFactors = FALSE
-  )
-  inset_data[[paste0("Slope (", slope_units, ")")]] <- slope_data$display_text
-  inset_data[["p-value"]] <- slope_data$p_round
-
-  # Create table grob
-  table_grob <- tableGrob(inset_data,
-    rows = NULL,
-    theme = ttheme_minimal(
-      core = list(
-        fg_params = list(cex = 0.8),
-        bg_params = list(fill = "white", alpha = 0.8)
-      ),
-      colhead = list(
-        fg_params = list(cex = 0.9, fontface = "bold"),
-        bg_params = list(fill = "lightgray", alpha = 0.8)
-      )
-    )
-  )
-
-  # Add colored rectangles for sites in table
-  for (i in 1:nrow(inset_data)) {
-    site_name <- inset_data$Site[i]
-    color <- site_colors[site_name]
-    table_grob <- gtable_add_grob(table_grob,
-      rectGrob(gp = gpar(fill = color, alpha = 0.3, col = NA)),
-      t = i + 1, l = 1, r = 1
-    )
-  }
-
-  # Add the table as annotation - use dynamic y column for positioning
-  y_values <- plot_data[[y_col]]
-  p_with_inset <- p +
-    annotation_custom(table_grob,
-      xmin = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.35,
-      xmax = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.05,
-      ymin = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.4,
-      ymax = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.05
-    )
-
-  return(p_with_inset)
-}
-
-
+download_data <- TRUE
 
 # download data -----------------------------------------------------------
 # Note: if you have already downloaded SOME data, the read_data_package_archive
@@ -262,6 +80,224 @@ if (download_data) {
     unzip(zipfile = fname, exdir = data_dir)
   }
 }
+
+# functions and plot formats-----------------------------------------------------------
+
+# define function to perform
+perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year") {
+  # Remove any missing values
+  clean_data <- data[!is.na(data[[value_col]]), ]
+  
+  if (nrow(clean_data) < 3) {
+    return(data.frame(
+      mk_tau = NA,
+      mk_pvalue = NA,
+      mk_trend = "insufficient data",
+      ts_slope = NA,
+      ts_intercept = NA
+    ))
+  }
+  # Ensure data is sorted by year before trend analysis
+  data <- data %>% arrange(!!sym(year_col))
+  # Mann-Kendall test
+  mk_test <- mk.test(data[[value_col]])
+  
+  # Theil-Sen slope
+  ts_test <- as.numeric(sens.slope(data[[value_col]])$estimates)
+  
+  # Calculate intercept
+  intercepts <- data[[value_col]] - ts_test * data[[year_col]]
+  sens_intercept <- median(intercepts)
+  
+  # Determine trend direction
+  trend_direction <- case_when(
+    mk_test$p.value > 0.05 ~ "no trend",
+    mk_test$statistic > 0 ~ "increasing",
+    mk_test$statistic < 0 ~ "decreasing",
+    TRUE ~ "no trend"
+  )
+  
+  return(data.frame(
+    mk_tau = as.numeric(mk_test$statistic),
+    mk_pvalue = as.numeric(mk_test$p.value),
+    mk_trend = trend_direction,
+    ts_slope = ts_test,
+    ts_intercept = sens_intercept
+  ))
+}
+
+# Create plot for a specific season with all sites
+create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
+                                 y_col = "tot_ppt", y_label = "Precipitation (mm)",
+                                 plot_title = NULL, slope_units = "mm/yr") {
+  # Filter data for the target season
+  plot_data <- seasonal_data %>%
+    filter(season == target_season) %>%
+    left_join(trend_results %>% filter(season == target_season),
+              by = c("site", "season")
+    ) %>%
+    mutate(
+      # Create significance flag for line types
+      significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
+      # Handle cases where significance is NA
+      significant = ifelse(is.na(significant), "Insufficient data", significant)
+    )
+  
+  # Define colors for sites (you may need to adjust these based on your sites)
+  site_colors <- c(
+    "C1" = "#D55E00",
+    "D1" = "#56B4E9",
+    "SDL" = "#009E73"
+  )
+  site_linetypes <- c(
+    "C1" = "solid",
+    "D1" = "dashed",
+    "SDL" = "dotted"
+  )
+  
+  # Calculate trend lines for each site's data range
+  trend_lines <- plot_data %>%
+    group_by(site) %>%
+    filter(!is.na(ts_slope) & !is.na(ts_intercept)) %>%
+    summarize(
+      min_year = min(year, na.rm = TRUE),
+      max_year = max(year, na.rm = TRUE),
+      ts_slope = first(ts_slope),
+      ts_intercept = first(ts_intercept),
+      significant = first(significant),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      y_start = ts_intercept + ts_slope * min_year,
+      y_end = ts_intercept + ts_slope * max_year
+    )%>%
+    filter(significant=="Significant") #this will keep only significant trends; a line will be drawn for only significant trends
+  
+  # Create the plot title
+  if (is.null(plot_title)) {
+    plot_title <- paste(stringr::str_to_title(target_season), "Trends by Site")
+  }
+  
+  # Create main plot using tidy evaluation for dynamic y column
+  p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
+    # geom_point(alpha = 0.6, size = 1.5) +
+    geom_line(alpha = 0.7, size = 1) +
+    geom_segment(
+      data = trend_lines,
+      aes(
+        x = min_year, y = y_start,
+        xend = max_year, yend = y_end,
+        color = site, linetype = site
+      ),
+      size = 1.2
+    ) +
+    scale_color_manual(values = site_colors, name = "Site") +
+    scale_linetype_manual(values = site_linetypes)+
+    #scale_linetype_manual(
+    # values = c(
+    #  "Significant" = "solid",
+    #  "Non-significant" = "dashed",
+    # "Insufficient data" = "dotted"
+    # ),
+    # name = "Mann-Kendall\nSignificance"
+    # ) +
+    ggtitle(plot_title) +
+    ylab(y_label) +
+    xlab("Year") +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      legend.box = "horizontal",
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.title = element_text(size = 12),
+      axis.text = element_text(size = 10)
+    ) +
+    guides(color = guide_legend(override.aes = list(linetype = "solid")))
+  
+  # Create table with slope information
+  slope_data <- plot_data %>%
+    select(site, ts_slope, mk_pvalue, mk_trend) %>%
+    distinct() %>%
+    mutate(
+      slope_round = round(ts_slope, 3),
+      p_round = round(mk_pvalue, 3),
+      significance = ifelse(mk_pvalue < 0.05, "*", ""),
+      display_text = paste0(slope_round, significance)
+    )
+  
+  # Create Grid Graphical Object (grob) with dynamic slope units
+  inset_data <- data.frame(
+    Site = slope_data$site,
+    stringsAsFactors = FALSE
+  )
+  
+  #Rename sites for display
+  inset_data <- inset_data %>%
+    mutate(Site = case_when(
+      Site == "C1" ~ "Subalpine (C1)",
+      Site == "D1" ~ "Alpine (D1)",
+      Site == "SDL" ~ "Saddle (SDL)",  # Keep SDL as is, or change to something else
+      TRUE ~ Site  # Keep any other sites as is
+    ))
+  
+  inset_data[[paste0("Slope (", slope_units, ")")]] <- slope_data$display_text
+  inset_data[["p-value"]] <- slope_data$p_round
+  
+  # Create table grob
+  table_grob <- tableGrob(inset_data,
+                          rows = NULL,
+                          theme = ttheme_minimal(
+                            core = list(
+                              fg_params = list(cex = 0.8),
+                              bg_params = list(fill = "white", alpha = 0.8)
+                            ),
+                            colhead = list(
+                              fg_params = list(cex = 0.9, fontface = "bold"),
+                              bg_params = list(fill = "lightgray", alpha = 0.8)
+                            )
+                          )
+  )
+  
+  # Add colored rectangles for sites in table
+  for (i in 1:nrow(inset_data)) {
+    site_name <- inset_data$Site[i]
+    #Map display names back to original site codes for color lookup
+    original_site <- case_when(
+      site_name == "Subalpine (C1)" ~ "C1",
+      site_name == "Alpine (D1)" ~ "D1",
+      site_name =="Saddle (SDL)" ~"SDL",
+      TRUE ~ site_name
+    )
+    color <- site_colors[original_site]
+    table_grob <- gtable_add_grob(table_grob,
+                                  rectGrob(gp = gpar(fill = color, alpha = 0.3, col = NA)),
+                                  t = i + 1, l = 1, r = 1
+    )
+  }
+  
+  #Add the table with control over spacing
+  p_with_table <- grid.arrange(
+    p,
+    table_grob,
+    nrow = 2,
+    heights = c(5, 1)  # Ratio of 3:1 (plot taller than table)
+  )
+  
+  return(p_with_table)
+  
+  # Add the table as annotation - use dynamic y column for positioning
+  #y_values <- plot_data[[y_col]]
+  #p_with_inset <- p +
+  # annotation_custom(table_grob,
+  #  xmin = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.35,
+  # xmax = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.05,
+  #ymin = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.4,
+  #ymax = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.05
+  #)
+  
+  #return(p_with_inset)
+}
+
 
 # Read and merge ppt and temp datasets --------------------------------------------------
 
@@ -369,37 +405,45 @@ summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
   plot_title = "Sep-May"
 )
+summer_plot_ppt
 
 summer_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "summer",
   y_col = "mean_temp", y_label = "Temp (deg C)",
   plot_title = "Summer\n(Jun-Aug)", slope_units = "degC/yr"
 )
+summer_plot_temp
+
 spring_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "spring",
   y_col = "mean_temp", y_label = "Temp (deg C)",
   plot_title = "Spring\n(Mar-May)", slope_units = "degC/yr"
 )
+spring_plot_temp
 
 fall_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "fall",
   y_col = "mean_temp", y_label = "Temp (deg C)",
   plot_title = "Fall\n(Sep-Nov)", slope_units = "degC/yr"
 )
+fall_plot_temp
 
 winter_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "winter",
   y_col = "mean_temp", y_label = "Temp (deg C)",
   plot_title = "Winter\n(Dec-Feb)", slope_units = "degC/yr"
 )
+winter_plot_temp
 
 summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer",
   plot_title = "Jun-Aug"
 )
+summer_plot_ppt
+
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
   plot_title = "Sep-May"
 )
-
+winter_plot_ppt
 
 # Combined plots ---------------------------------------------------------------
 
