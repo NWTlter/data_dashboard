@@ -206,13 +206,13 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     xlab("Year") +
     theme_classic() +
     theme(
-      legend.position = "bottom",
-      legend.box = "horizontal",
+      legend.position = "none",
+      #legend.box = "horizontal",
       plot.title = element_text(size = 14, face = "bold"),
       axis.title = element_text(size = 12),
       axis.text = element_text(size = 10)
-    ) +
-    guides(color = guide_legend(override.aes = list(linetype = "solid")))
+    ) 
+    #guides(color = guide_legend(override.aes = list(linetype = "solid")))
   
   # Create table with slope information
   slope_data <- plot_data %>%
