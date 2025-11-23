@@ -84,6 +84,18 @@ if (download_data) {
 
 # functions and plot formats-----------------------------------------------------------
 
+site_colors <- c(
+  "C1" = "#D55E00",
+  "D1" = "#56B4E9",
+  "SDL" = "#009E73"
+)
+
+site_linetypes <- c(
+  "C1" = "solid",
+  "D1" = "dashed",
+  "SDL" = "dotted"
+)
+
 # define function to perform
 perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year") {
   # Remove any missing values
@@ -145,18 +157,6 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       significant = ifelse(is.na(significant), "Insufficient data", significant)
     )
   
-  # Define colors for sites (you may need to adjust these based on your sites)
-  site_colors <- c(
-    "C1" = "#D55E00",
-    "D1" = "#56B4E9",
-    "SDL" = "#009E73"
-  )
-  site_linetypes <- c(
-    "C1" = "solid",
-    "D1" = "dashed",
-    "SDL" = "dotted"
-  )
-  
   # Calculate trend lines for each site's data range
   trend_lines <- plot_data %>%
     group_by(site) %>%
@@ -172,8 +172,9 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     mutate(
       y_start = ts_intercept + ts_slope * min_year,
       y_end = ts_intercept + ts_slope * max_year
-    )%>%
-    filter(significant=="Significant") #this will keep only significant trends; a line will be drawn for only significant trends
+    )
+  #%>%
+    #filter(significant=="Significant") #this will keep only significant trends; a line will be drawn for only significant trends
   
   # Create the plot title
   if (is.null(plot_title)) {
@@ -215,6 +216,11 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       axis.text = element_text(size = 10)
     ) 
     #guides(color = guide_legend(override.aes = list(linetype = "solid")))
+  
+  # Return early if table is not needed
+  if(!include_table){
+    return (p)
+  }
   
   # Create table with slope information
   slope_data <- plot_data %>%
@@ -282,22 +288,11 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     p,
     table_grob,
     nrow = 2,
-    heights = c(5, 1)  # Ratio of 3:1 (plot taller than table)
+    heights = c(5, 1)  # Ratio of 5:1 (plot taller than table)
   )
-  
-  if (include_table) {
-    # Add the table with control over spacing
-    p_with_table <- grid.arrange(
-      p,
-      table_grob,
-      nrow = 2,
-      heights = c(5, 1)
-    )
-    return(p_with_table)
-  } else {
-    return(p)  # Return just the plot
-  }
+  return(p_with_table)
 }
+
 
 # Read and merge ppt and temp datasets --------------------------------------------------
 
@@ -402,10 +397,12 @@ trend_results_temp_annual_d1 <- temp_annual_d1 %>%
 summer_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "summer",
   plot_title = "Jun-Aug"
 )
+summer_plot_ppt
+
 winter_plot_ppt <- create_seasonal_plot(ppt_seasonal, trend_results_ppt, "winter",
   plot_title = "Sep-May"
 )
-summer_plot_ppt
+winter_plot_ppt
 
 summer_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "summer",
