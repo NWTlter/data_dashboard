@@ -25,7 +25,9 @@ theme_set(theme_bw())
 library(viridisLite) #for color-blind accessibility
 
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
+
+data_dir <- file.path("c1_d1_sdl_temp_ppt", "data")
 
 # download data -----------------------------------------------------------
 # Note: if you have already downloaded SOME data, the read_data_package_archive
@@ -40,7 +42,6 @@ if (download_data) {
   # 185 is c1 temp
   # 187 is d1 temp
   
-  data_dir <- file.path("c1_d1_sdl_temp_ppt", "data")
   if (!dir.exists(data_dir)) {
     dir.create(data_dir, recursive = TRUE)
   }
@@ -129,7 +130,8 @@ perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year
 # Create plot for a specific season with all sites
 create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
                                  y_col = "tot_ppt", y_label = "Precipitation (mm)",
-                                 plot_title = NULL, slope_units = "mm/yr") {
+                                 plot_title = NULL, slope_units = "mm/yr",
+                                 include_table = TRUE) {
   # Filter data for the target season
   plot_data <- seasonal_data %>%
     filter(season == target_season) %>%
@@ -283,21 +285,19 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     heights = c(5, 1)  # Ratio of 3:1 (plot taller than table)
   )
   
-  return(p_with_table)
-  
-  # Add the table as annotation - use dynamic y column for positioning
-  #y_values <- plot_data[[y_col]]
-  #p_with_inset <- p +
-  # annotation_custom(table_grob,
-  #  xmin = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.35,
-  # xmax = max(plot_data$year) - (max(plot_data$year) - min(plot_data$year)) * 0.05,
-  #ymin = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.4,
-  #ymax = max(y_values, na.rm = TRUE) - (max(y_values, na.rm = TRUE) - min(y_values, na.rm = TRUE)) * 0.05
-  #)
-  
-  #return(p_with_inset)
+  if (include_table) {
+    # Add the table with control over spacing
+    p_with_table <- grid.arrange(
+      p,
+      table_grob,
+      nrow = 2,
+      heights = c(5, 1)
+    )
+    return(p_with_table)
+  } else {
+    return(p)  # Return just the plot
+  }
 }
-
 
 # Read and merge ppt and temp datasets --------------------------------------------------
 
@@ -447,6 +447,31 @@ winter_plot_ppt
 
 # Combined plots ---------------------------------------------------------------
 
+# Create a temporary plot with legend just for extraction
+temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer"), 
+                                aes(x = year, y = mean_temp, color = site, linetype = site)) +
+  geom_line() +
+  scale_color_manual(values = site_colors, 
+                     name = "Site",
+                     labels = c("C1" = "Subalpine", "D1" = "Alpine", "SDL" = "Saddle")) +
+  scale_linetype_manual(values = site_linetypes,
+                        name = "Site",
+                        labels = c("C1" = "Subalpine", "D1" = "Alpine", "SDL" = "Saddle")) +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        legend.box = "horizontal") +
+  guides(color = guide_legend(override.aes = list(linewidth = 1)))
+
+# Function to extract legend
+get_legend <- function(plot) {
+  tmp <- ggplot_gtable(ggplot_build(plot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+shared_legend <- get_legend(temp_plot_with_legend)
+
 # Extract legend from one plot
 get_legend <- function(plot) {
   tmp <- ggplot_gtable(ggplot_build(plot))
@@ -458,7 +483,7 @@ get_legend <- function(plot) {
 shared_legend_temp <- get_legend(spring_plot_temp)
 shared_legend_ppt <- get_legend(summer_plot_ppt)
 
-
+#Temperature Plots
 jpeg("c1_d1_sdl_temp_ppt/figures/combined_plot_temp.jpg", width = 12, height = 10, units = "in", res = 300)
 grid.arrange(winter_plot_temp + theme(legend.position = "none"),
   spring_plot_temp + theme(legend.position = "none"),
@@ -471,6 +496,7 @@ grid.arrange(winter_plot_temp + theme(legend.position = "none"),
 )
 dev.off()
 
+#Precipitation Plots
 jpeg("c1_d1_sdl_temp_ppt/figures/combined_plot_ppt.jpg", width = 12, height = 6, units = "in", res = 300)
 combined_plot_ppt <- grid.arrange(winter_plot_ppt + theme(legend.position = "none"),
   summer_plot_ppt + theme(legend.position = "none"),
@@ -545,7 +571,7 @@ c1_d1_temps <- ggplot(
     size = 1.2
   ) +
   scale_color_manual(
-    values = c("C1" = "red", "D1" = "blue"),
+    values = c("C1" = "#D55E00", "D1" = "#0072B2"),
     labels = legend_labels,
     name = NULL
   ) +
@@ -610,7 +636,7 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
                              )
                          ), aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("pos" = "#99000d", "neg" = "#034e7b")) +
+  scale_fill_manual(values = c("pos" = "#D55E00", "neg" = "#0072B2")) +
   labs(y = "Seasonal temperature anomaly (°C)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
   theme_hc() +
@@ -619,6 +645,7 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
     strip.text = element_text(size = 8)
   ) +
   facet_wrap(~season, labeller = labeller(season = c("spring" = "Spring (Mar-May)", "summer" = "Summer (Jun-Aug)", "fall" = "Fall (Sep-Nov)", "winter" = "Winter (Dec-Feb)")))
+anom_temp_D1
 
 ggsave(anom_temp_D1,
        filename = "c1_d1_sdl_temp_ppt/figures/d1_temp_anom_by_season.png",
@@ -637,7 +664,7 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
       )
   ), aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("pos" = "#034e7b", "neg" = "#99000d")) +
+  scale_fill_manual(values = c("pos" = "#0072B2", "neg" =  "#D55E00")) +
   labs(y = "Seasonal precipitation anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
@@ -646,6 +673,7 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
     strip.text = element_text(size = 8)
   ) +
   facet_wrap(~season, labeller = labeller(season = c("summer" = "Jun-Aug", "winter" = "Sep-May")))
+anom_ppt_D1
 
 ggsave(anom_ppt_D1,
   file = "c1_d1_sdl_temp_ppt/figures/d1_ppt_anom_by_season.png",
@@ -672,11 +700,12 @@ anom_ppt_annual_d1 <- ppt_annual_d1 %>%
     posneg = ifelse(anom_ppt > 0, "pos", "neg") %>%
       factor(c("pos", "neg"))
   )
+anom_ppt_annual_d1
 
 # Create annual temperature anomaly plot for D1
 anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("pos" = "#99000d", "neg" = "#034e7b")) +
+  scale_fill_manual(values = c("pos" = "#D55E00", "neg" = "#0072B2" )) +
   labs(
     # title = "Annual Temperature Anomalies - D1 Site",
     y = "Annual temperature anomaly (°C)",
@@ -688,11 +717,12 @@ anom_temp_annual_d1_plot <- ggplot(anom_temp_annual_d1, aes(x = year, y = anom_t
     legend.position = "none",
     plot.title = element_text(hjust = 0.5)
   )
+anom_temp_annual_d1_plot
 
 # Create annual precipitation anomaly plot for D1
 anom_ppt_annual_d1_plot <- ggplot(anom_ppt_annual_d1, aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("pos" = "#034e7b", "neg" = "#99000d")) +
+  scale_fill_manual(values = c("pos" = "#0072B2", "neg" =  "#D55E00")) +
   labs(
     y = "Annual precipitation anomaly (%)",
     x = "Year"
@@ -706,6 +736,7 @@ anom_ppt_annual_d1_plot <- ggplot(anom_ppt_annual_d1, aes(x = year, y = anom_ppt
     legend.position = "none",
     plot.title = element_text(hjust = 0.5)
   )
+anom_ppt_annual_d1_plot
 
 # Save annual anomaly plots
 ggsave(anom_temp_annual_d1_plot,
