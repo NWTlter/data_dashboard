@@ -6,16 +6,37 @@ library(ggthemes)
 library(lemon)
 library(officer)
 library(magrittr)
+library(viridisLite) #for color-blind accessibility
+library(EDIutils)
 
 rm(list = ls())
 
 # Define directory paths for cross-platform compatibility
-data_dir <- file.path("sdl_moisture", "data")
-figures_dir <- file.path("sdl_moisture", "figures")
+# Go up one level to data_dashboard, then into sdl_moisture
+parent_dir <- dirname(getwd())  # Go from c1_d1_sdl_temp_ppt to data_dashboard
+data_dir <- file.path(parent_dir, "sdl_moisture", "data")
+figures_dir <- file.path(parent_dir, "sdl_moisture", "figures")
+
+# Create directories if they don't exist
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
+
+# Verify paths
+cat("\n=== Directory Setup ===\n")
+cat("Current working dir:", getwd(), "\n")
+cat("Parent dir:", parent_dir, "\n")
+cat("Data dir:", data_dir, "\n")
+cat("  Exists:", dir.exists(data_dir), "\n")
+cat("Figures dir:", figures_dir, "\n")
+cat("  Exists:", dir.exists(figures_dir), "\n")
+cat("========================\n\n")
 
 # only need to download once
 download_data <- FALSE
-
 
 # User-specified notes for PowerPoint slides
 # slide g1 - no dynamic text edit directly
@@ -122,11 +143,12 @@ summer_moist <- df %>%
 # plot
 g1 <- ggplot(summer_moist, aes(x = year, y = anom_moist)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#034e7b", "#99000d")) +
-  labs(y = "Soil moisture anomaly (%) \n Jun-Aug", x = "") +
+  scale_fill_manual(values = c("#0072B2", "#D55E00")) +
+  labs(y = "Soil moisture anomaly (%) \n Jun-Aug", x = "Year") +
   scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
   theme(legend.position = "none")
+g1
 
 ggsave(g1,
   file = file.path(figures_dir, "sdl_soil_moist_anom.png"),
@@ -186,7 +208,7 @@ g2 <- ggplot(summer_moist_last_yr %>%
   ylab("Soil moisture (%)") +
   xlab(NULL) +
   theme_hc()
-
+g2
 
 ggsave(g2,
   file = file.path(figures_dir, "sdl_soil_moist_last_year.png"),
@@ -232,9 +254,9 @@ ppt2 <- read_pptx() %>%
   set_notes(value = slide_notes_g2, location = notes_location_type(type = "body"))
 
 # Save both PowerPoint presentations
-print(ppt1, target = file.path(figures_dir, "sdl_soil_mois_anom.pptx"))
+print(ppt1, target = file.path(figures_dir, "sdl_soil_moist_anom.pptx"))
 print(ppt2, target = file.path(figures_dir, "sdl_soil_moist_last_year.pptx"))
 
 cat("PowerPoint presentations saved to:\n")
-cat("  -", file.path(figures_dir, "sdl_soil_mois_anom.pptx"), "\n")
+cat("  -", file.path(figures_dir, "sdl_soil_moist_anom.pptx"), "\n")
 cat("  -", file.path(figures_dir, "sdl_soil_moist_last_year.pptx"), "\n")
