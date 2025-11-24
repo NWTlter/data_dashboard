@@ -642,8 +642,8 @@ c1_slope <- slope_data$ts_slope[slope_data$site == "C1"]
 d1_slope <- slope_data$ts_slope[slope_data$site == "D1"]
 
 legend_labels <- c(
-  "C1" = paste0("Subalpine +", round(c1_slope, 3), "°C per year"),
-  "D1" = paste0("Alpine +", round(d1_slope, 3), "°C per year")
+  "C1" = paste0("Subalpine: +", round(c1_slope, 3), "°C per year"),
+  "D1" = paste0("Alpine: +", round(d1_slope, 3), "°C per year")
 )
 
 
@@ -917,8 +917,8 @@ c1_slope_annual <- slope_data_annual$ts_slope[slope_data_annual$site == "C1"]
 d1_slope_annual <- slope_data_annual$ts_slope[slope_data_annual$site == "D1"]
 
 legend_labels_annual <- c(
-  "C1" = paste0("Subalpine +", round(c1_slope_annual, 3), "°C per year"),
-  "D1" = paste0("Alpine +", round(d1_slope_annual, 3), "°C per year")
+  "C1" = paste0("Subalpine: +", round(c1_slope_annual, 3), "°C per year"),
+  "D1" = paste0("Alpine: +", round(d1_slope_annual, 3), "°C per year")
 )
 
 # Create the plot-- Annual Temperature for C1 and D1
@@ -1009,8 +1009,8 @@ c1_slope_annual_ppt <- slope_data_annual_ppt$ts_slope[slope_data_annual_ppt$site
 d1_slope_annual_ppt <- slope_data_annual_ppt$ts_slope[slope_data_annual_ppt$site == "D1"]
 
 legend_labels_annual_ppt <- c(
-  "C1" = paste0("Subalpine +", round(c1_slope_annual_ppt, 3), "mm per year"),
-  "D1" = paste0("Alpine +", round(d1_slope_annual_ppt, 3), "mm per year")
+  "C1" = paste0("Subalpine: +", round(c1_slope_annual_ppt, 3), "mm per year"),
+  "D1" = paste0("Alpine: +", round(d1_slope_annual_ppt, 3), "mm per year")
 )
 
 # Create the plot
