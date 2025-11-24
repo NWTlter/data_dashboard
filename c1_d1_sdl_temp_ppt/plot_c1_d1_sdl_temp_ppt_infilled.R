@@ -92,7 +92,7 @@ if (download_data) {
 
 site_colors <- c(
   "C1" = "#D55E00",
-  "D1" = "#56B4E9",
+  "D1" = "#0072B2",
   "SDL" = "#009E73"
 )
 
@@ -153,6 +153,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
   # Filter data for the target season
   plot_data <- seasonal_data %>%
     filter(season == target_season) %>%
+    filter(site != "SDL") %>% #removing Saddle- may want to add back depending on your interest
     left_join(trend_results %>% filter(season == target_season),
               by = c("site", "season")
     ) %>%
@@ -211,7 +212,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
   
   # Create main plot using tidy evaluation for dynamic y column
   p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
-    # geom_point(alpha = 0.6, size = 1.5) +
+    geom_point(alpha = 0.6, size = 1.5) +
     geom_line(size = 1) +
     geom_segment(
       data = trend_lines,
@@ -225,8 +226,8 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     scale_color_manual(values = site_colors, name = "Site",
                        labels = c(
                          "C1" = "Subalpine (C1)",
-                         "D1" = "Alpine (D1)",
-                         "SDL" = "Saddle (SDL)"
+                         "D1" = "Alpine (D1)"
+                         #"SDL" = "Saddle (SDL)" - add back depending on your interest
                        )) +
     #scale_linetype_manual(values = site_linetypes, name = "Site")+
     scale_linetype_manual(
@@ -256,11 +257,11 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     ) +
     guides(
       color = guide_legend(order=1, nrow = length(unique(plot_data$site)), override.aes = list(size = 1.2), keywidth = 1,
-                           title.theme = element_text(size = 6),  
-                           label.theme = element_text(size = 6)),
+                           title.theme = element_text(size = 7),  
+                           label.theme = element_text(size = 7)),
       linetype = guide_legend(order=2, nrow = 2, override.aes = list(size = 1.2, linetype = c("solid", "dashed")), keywidth = 2.5,
-                              title.theme = element_text(size = 6),  
-                              label.theme = element_text(size = 6))
+                              title.theme = element_text(size = 7),  
+                              label.theme = element_text(size = 7))
     )
   
   # Return early if table is not needed
@@ -550,16 +551,16 @@ print("All seasonal plots saved to figures folder!")
 
 # Combined plots ---------------------------------------------------------------
 
-# Create a temporary plot with legend just for extraction for Temperature (3 sites)
+# Create a temporary plot with legend just for extraction for Temperature (2 sites obly- No Saddle)
 if(!is.null(dev.list())) dev.off()
 
 temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>% 
                                 mutate(site=factor(site, levels= c("C1", "D1", "SDL"))),
                                 aes(x = year, y = mean_temp, color = site)) +
   geom_line() +
-  scale_color_manual(values = site_colors, 
+  scale_color_manual(values = site_colors[c("C1", "D1")], 
                      name = "Site",
-                     labels = c("C1" = "Subalpine", "D1" = "Alpine", "SDL" = "Saddle")) +
+                     labels = c("C1" = "Subalpine", "D1" = "Alpine")) +
   theme_classic() +
   theme(legend.position = "bottom",
         legend.box = "horizontal") +
@@ -709,8 +710,8 @@ c1_d1_temps <- ggplot(
     season %in% c("summer")),
   aes(x = year, y = mean_temp, color = site)
 ) +
-  geom_point() +
-  geom_line() +
+  geom_point(alpha = 0.6, size = 1.5) +
+  geom_line(size = 1) +
   geom_segment(
     data = trend_segments %>%
       filter(site %in% c("C1", "D1") &
@@ -983,8 +984,8 @@ c1_d1_temps_annual <- ggplot(
   temp_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = mean_temp, color = site)
 ) +
-  geom_point() +
-  geom_line() +
+  geom_point(alpha = 0.6, size = 1.5) +
+  geom_line(size = 1) +
   geom_segment(
     data = trend_segments_annual %>%
       filter(site %in% c("C1", "D1")),
@@ -1081,8 +1082,8 @@ c1_d1_ppt_annual <- ggplot(
   ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = tot_ppt, color = site)
 ) +
-  geom_point() +
-  geom_line() +
+  geom_point(alpha = 0.6, size = 1.5) +
+  geom_line(size = 1) +
   geom_segment(
     data = trend_segments_annual_ppt %>%
       filter(site %in% c("C1", "D1")),
