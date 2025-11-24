@@ -552,7 +552,7 @@ print("All seasonal plots saved to figures folder!")
 
 # Combined plots ---------------------------------------------------------------
 
-# Create a temporary plot with legend just for extraction for Temperature (2 sites obly- No Saddle)
+# Create a temporary plot with legend just for extraction for Temperature (2 sites only- No Saddle)
 if(!is.null(dev.list())) dev.off()
 
 temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>% 
@@ -638,7 +638,7 @@ if (!is.null(dev.list())) dev.off() # closes any open devices
 
 jpeg(
   file.path(figures_dir, "combined_plot_ppt.jpg"), 
-  width = 12, height = 10, units = "in", res = 300
+  width = 12, height = 6, units = "in", res = 300
 )
 
 # Create plots WITHOUT tables for the combined figure
