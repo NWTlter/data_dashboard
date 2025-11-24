@@ -220,6 +220,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     xlab("Year") +
     theme_classic() +
     theme(
+      legend.text=element_text(size=8),
       legend.position = "bottom",
       legend.box = "horizontal",
       plot.title = element_text(size = 14, face = "bold"),
@@ -227,8 +228,8 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       axis.text = element_text(size = 10)
     ) +
     guides(
-      color = guide_legend(order=1, override.aes = list(size = 1.2), keywidth = 3),
-      linetype = guide_legend(order=2, override.aes = list(size = 1.2), keywidth = 3)
+      color = guide_legend(order=1, override.aes = list(size = 1.2), keywidth = 1),
+      linetype = guide_legend(order=2, override.aes = list(size = 1.2), keywidth = 2.5)
     )
   
   # Return early if table is not needed
@@ -296,6 +297,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
                                   t = i + 1, l = 1, r = 1
     )
   }
+  
   
   #Add the table with control over spacing
   p_with_table <- grid.arrange(
