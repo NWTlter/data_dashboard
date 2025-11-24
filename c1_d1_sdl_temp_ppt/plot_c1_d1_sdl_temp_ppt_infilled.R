@@ -865,7 +865,7 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
                          ), aes(x = year, y = anom_temp)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("pos" = "#D55E00", "neg" = "#0072B2")) +
-  labs(y = "Seasonal temperature anomaly (°C)", x = "") +
+  labs(y = "Seasonal temperature anomaly (°C)", x = "Year") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(hotter %<->% colder))) +
   theme_hc() +
   theme(
@@ -893,7 +893,7 @@ anom_ppt_D1 <- ggplot(anom_ppt_season %>%
   ), aes(x = year, y = anom_ppt)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("pos" = "#0072B2", "neg" =  "#D55E00")) +
-  labs(y = "Seasonal precipitation anomaly (%)", x = "") +
+  labs(y = "Seasonal precipitation anomaly (%)", x = "Year") +
   scale_y_symmetric(sec.axis = sec_axis(trans = identity, breaks = NULL, name = expression(wetter %<->% drier))) +
   theme_hc() +
   theme(
