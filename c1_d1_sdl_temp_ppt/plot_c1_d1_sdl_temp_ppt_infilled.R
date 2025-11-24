@@ -558,6 +558,8 @@ if(!is.null(dev.list())) dev.off()
 temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>% 
                                 mutate(site=factor(site, levels= c("C1", "D1", "SDL"))),
                                 aes(x = year, y = mean_temp, color = site)) +
+  geom_point(alpha = 0.6, size = 1.5) + 
+  geom_point(alpha = 0.6, size = 1.5) +
   geom_line() +
   scale_color_manual(values = site_colors[c("C1", "D1")], 
                      name = NULL,
@@ -568,12 +570,20 @@ temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>%
         legend.title = element_text(size = 14),   
         legend.text = element_text(size = 13) 
         )+
-  guides(color = guide_legend(override.aes = list(linewidth = 1)))
+  guides(color = guide_legend(
+    override.aes = list(
+      linewidth = 1,      # Line width
+      shape = 16,         # Point shape (filled circle)
+      size = 1.5,         # Point size - matches  geom_point(size = 1.5)
+      alpha = 0.6         # Point transparency - matches  geom_point(alpha = 0.6)
+    )
+  ))
 
 # Create a temporary plot with legend for PRECIPITATION (2 sites only)
 ppt_plot_with_legend <- ggplot(ppt_seasonal %>% filter(season == "summer") %>% 
                                  mutate(site=factor(site, levels= c("C1", "D1"))),
                                aes(x = year, y = tot_ppt, color = site)) +
+  geom_point(alpha = 0.6, size = 1.5) + 
   geom_line() +
   scale_color_manual(values = site_colors[c("C1", "D1")], 
                      name = NULL,
@@ -584,7 +594,14 @@ ppt_plot_with_legend <- ggplot(ppt_seasonal %>% filter(season == "summer") %>%
         legend.title = element_text(size = 14),   
         legend.text = element_text(size = 13) 
   ) +
-  guides(color = guide_legend(override.aes = list(linewidth = 1)))
+  guides(color = guide_legend(
+    override.aes = list(
+      linewidth = 1,      # Line width
+      shape = 16,         # Point shape (filled circle)
+      size = 1.5,         # Point size - matches  geom_point(size = 1.5)
+      alpha = 0.6         # Point transparency - matches  geom_point(alpha = 0.6)
+    )
+  ))
 
 # Function to extract legend
 get_legend <- function(plot) {
