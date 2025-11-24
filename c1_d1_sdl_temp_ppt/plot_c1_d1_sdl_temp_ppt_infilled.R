@@ -870,7 +870,9 @@ anom_temp_D1 <- ggplot(anom_temp_season %>%
   theme_hc() +
   theme(
     legend.position = "none",
-    strip.text = element_text(size = 8)
+    strip.text = element_text(size = 8),
+    axis.title.x = element_text(size = 10) 
+    
   ) +
   facet_wrap(~season, labeller = labeller(season = c("spring" = "Spring (Mar-May)", "summer" = "Summer (Jun-Aug)", "fall" = "Fall (Sep-Nov)", "winter" = "Winter (Dec-Feb)")))
 anom_temp_D1
