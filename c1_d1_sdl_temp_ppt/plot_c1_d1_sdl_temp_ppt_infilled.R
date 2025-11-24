@@ -560,11 +560,14 @@ temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>%
                                 aes(x = year, y = mean_temp, color = site)) +
   geom_line() +
   scale_color_manual(values = site_colors[c("C1", "D1")], 
-                     name = "Site",
+                     name = NULL,
                      labels = c("C1" = "Subalpine", "D1" = "Alpine")) +
   theme_classic() +
   theme(legend.position = "bottom",
-        legend.box = "horizontal") +
+        legend.box = "horizontal",
+        legend.title = element_text(size = 14),   
+        legend.text = element_text(size = 13) 
+        )+
   guides(color = guide_legend(override.aes = list(linewidth = 1)))
 
 # Create a temporary plot with legend for PRECIPITATION (2 sites only)
@@ -573,11 +576,14 @@ ppt_plot_with_legend <- ggplot(ppt_seasonal %>% filter(season == "summer") %>%
                                aes(x = year, y = tot_ppt, color = site)) +
   geom_line() +
   scale_color_manual(values = site_colors[c("C1", "D1")], 
-                     name = "Site",
+                     name = NULL,
                      labels = c("C1" = "Subalpine", "D1" = "Alpine")) +
   theme_classic() +
   theme(legend.position = "bottom",
-        legend.box = "horizontal") +
+        legend.box = "horizontal",
+        legend.title = element_text(size = 14),   
+        legend.text = element_text(size = 13) 
+  ) +
   guides(color = guide_legend(override.aes = list(linewidth = 1)))
 
 # Function to extract legend
@@ -598,6 +604,31 @@ if (!is.null(dev.list())) dev.off() #closes any open devices
 jpeg(
   file.path(figures_dir, "combined_plot_temp.jpg"), 
   width = 12, height = 10, units = "in", res = 300)
+
+# Create a temporary plot to extract significance legend
+temp_sig_legend_combined <- ggplot(
+  data.frame(x = 1:2, y = 1:2, sig = factor(c("Significant", "Non-significant"), 
+                                            levels = c("Significant", "Non-significant"))),
+  aes(x = x, y = y, linetype = sig)
+) +
+  geom_line() +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall Significance"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  guides(linetype = guide_legend(nrow = 1, override.aes = list(linewidth = 1.2), 
+                                 keywidth = 2.5,
+                                 title.theme = element_text(size = 14),      # Title size
+                                 label.theme = element_text(size = 13)       # Label size
+                                 ))
+
+sig_legend_temp_combined <- get_legend(temp_sig_legend_combined)
+
+# Combine both legends horizontally
+combined_legends_temp <- arrangeGrob(shared_legend_temp, sig_legend_temp_combined, 
+                                     ncol = 2, widths = c(1, 1))
 
 #Create plots WITHOUT tables for the combined figure
 grid.arrange(
@@ -625,10 +656,10 @@ grid.arrange(
                        plot_title = "Fall\n(Sep-Nov)", slope_units = "°C/yr",
                        include_table = FALSE
   ),
-  shared_legend_temp,
+  combined_legends_temp,  # Changed from shared_legend_temp
   ncol = 2, nrow = 3,
   layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
-  heights = c(1, 1, 0.1)
+  heights = c(1, 1, 0.15)  # Changed from 0.1 to accommodate both legends
 )
 dev.off()
 
@@ -640,6 +671,31 @@ jpeg(
   file.path(figures_dir, "combined_plot_ppt.jpg"), 
   width = 12, height = 6, units = "in", res = 300
 )
+
+# Create a temporary plot to extract significance legend
+ppt_sig_legend_combined <- ggplot(
+  data.frame(x = 1:2, y = 1:2, sig = factor(c("Significant", "Non-significant"), 
+                                            levels = c("Significant", "Non-significant"))),
+  aes(x = x, y = y, linetype = sig)
+) +
+  geom_line() +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall Significance"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  guides(linetype = guide_legend(nrow = 1, override.aes = list(linewidth = 1.2), 
+                                 keywidth = 2.5,
+                                 title.theme = element_text(size = 14),      # Title size
+                                 label.theme = element_text(size = 13)       # Label size
+  ))
+
+sig_legend_ppt_combined <- get_legend(ppt_sig_legend_combined)
+
+# Combine both legends horizontally
+combined_legends_ppt <- arrangeGrob(shared_legend_ppt, sig_legend_ppt_combined, 
+                                    ncol = 2, widths = c(1, 1))
 
 # Create plots WITHOUT tables for the combined figure
 grid.arrange(
@@ -655,10 +711,10 @@ grid.arrange(
                        plot_title = "Summer\n(Jun-Aug)", slope_units = "mm/yr",
                        include_table = FALSE
   ),
-  shared_legend_ppt,
+  combined_legends_ppt,  # Changed from shared_legend_ppt
   ncol = 2, nrow = 2,
   layout_matrix = rbind(c(1, 2), c(3, 3)),
-  heights = c(1, 0.1)
+  heights = c(1, 0.15)  # Changed from 0.1
 )
 dev.off()
 
