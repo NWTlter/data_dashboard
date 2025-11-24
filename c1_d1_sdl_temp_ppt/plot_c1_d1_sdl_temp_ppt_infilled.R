@@ -422,29 +422,29 @@ winter_plot_ppt
 
 summer_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "summer",
-  y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = "Summer\n(Jun-Aug)", slope_units = "degC/yr"
+  y_col = "mean_temp", y_label = "Temp (°C)",
+  plot_title = "Summer\n(Jun-Aug)", slope_units = "°C/yr"
 )
 summer_plot_temp
 
 spring_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "spring",
-  y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = "Spring\n(Mar-May)", slope_units = "degC/yr"
+  y_col = "mean_temp", y_label = "Temp (°C)",
+  plot_title = "Spring\n(Mar-May)", slope_units = "°C/yr"
 )
 spring_plot_temp
 
 fall_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "fall",
-  y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = "Fall\n(Sep-Nov)", slope_units = "degC/yr"
+  y_col = "mean_temp", y_label = "Temp (°C)",
+  plot_title = "Fall\n(Sep-Nov)", slope_units = "°C/yr"
 )
 fall_plot_temp
 
 winter_plot_temp <- create_seasonal_plot(temp_seasonal, trend_results_temp,
   target_season = "winter",
-  y_col = "mean_temp", y_label = "Temp (deg C)",
-  plot_title = "Winter\n(Dec-Feb)", slope_units = "degC/yr"
+  y_col = "mean_temp", y_label = "Temp (°C)",
+  plot_title = "Winter\n(Dec-Feb)", slope_units = "°C/yr"
 )
 winter_plot_temp
 
@@ -532,26 +532,26 @@ jpeg(
 grid.arrange(
   create_seasonal_plot(temp_seasonal, trend_results_temp,
                        target_season = "winter",
-                       y_col = "mean_temp", y_label = "Temp (deg C)",
-                       plot_title = "Winter\n(Dec-Feb)", slope_units = "degC/yr",
+                       y_col = "mean_temp", y_label = "Temp (°C)",
+                       plot_title = "Winter\n(Dec-Feb)", slope_units = "°C/yr",
                        include_table = FALSE
   ),
   create_seasonal_plot(temp_seasonal, trend_results_temp,
                        target_season = "spring",
-                       y_col = "mean_temp", y_label = "Temp (deg C)",
-                       plot_title = "Spring\n(Mar-May)", slope_units = "degC/yr",
+                       y_col = "mean_temp", y_label = "Temp (°C)",
+                       plot_title = "Spring\n(Mar-May)", slope_units = "°C/yr",
                        include_table = FALSE
   ),
   create_seasonal_plot(temp_seasonal, trend_results_temp,
                        target_season = "summer",
-                       y_col = "mean_temp", y_label = "Temp (deg C)",
-                       plot_title = "Summer\n(Jun-Aug)", slope_units = "degC/yr",
+                       y_col = "mean_temp", y_label = "Temp (°C)",
+                       plot_title = "Summer\n(Jun-Aug)", slope_units = "°C/yr",
                        include_table = FALSE
   ),
   create_seasonal_plot(temp_seasonal, trend_results_temp,
                        target_season = "fall",
-                       y_col = "mean_temp", y_label = "Temp (deg C)",
-                       plot_title = "Fall\n(Sep-Nov)", slope_units = "degC/yr",
+                       y_col = "mean_temp", y_label = "Temp (°C)",
+                       plot_title = "Fall\n(Sep-Nov)", slope_units = "°C/yr",
                        include_table = FALSE
   ),
   shared_legend_temp,
