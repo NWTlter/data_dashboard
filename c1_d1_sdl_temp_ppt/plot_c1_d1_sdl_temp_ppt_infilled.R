@@ -984,7 +984,7 @@ c1_d1_temps_annual <- ggplot(
   temp_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = mean_temp, color = site)
 ) +
-  geom_point(alpha = 0.6, size = 1.5) +
+  geom_point(alpha = 0.6, size = 2.5) +
   geom_line(size = 1) +
   geom_segment(
     data = trend_segments_annual %>%
@@ -1025,16 +1025,16 @@ c1_d1_temps_annual <- ggplot(
   ) +
   guides(
     color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
-                         title.theme = element_text(size = 6),  
-                         label.theme = element_text(size = 6)),  
+                         title.theme = element_text(size = 8),  
+                         label.theme = element_text(size = 8)),  
     linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
-                            title.theme = element_text(size = 6),  
-                            label.theme = element_text(size = 6))  
+                            title.theme = element_text(size = 8),  
+                            label.theme = element_text(size = 8))  
   )
 
 ggsave(c1_d1_temps_annual,
        filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
-       width = 12, height = 8, units = "in", dpi = 300,
+       width = 16, height = 16, units = "in", dpi = 300,
        scale = 0.5
 )
 
@@ -1082,7 +1082,7 @@ c1_d1_ppt_annual <- ggplot(
   ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = tot_ppt, color = site)
 ) +
-  geom_point(alpha = 0.6, size = 1.5) +
+  geom_point(alpha = 0.6, size = 2.5) +
   geom_line(size = 1) +
   geom_segment(
     data = trend_segments_annual_ppt %>%
@@ -1123,16 +1123,16 @@ c1_d1_ppt_annual <- ggplot(
   ) +
   guides(
     color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
-                         title.theme = element_text(size = 6),  
-                         label.theme = element_text(size = 6)),  
+                         title.theme = element_text(size = 8),  
+                         label.theme = element_text(size = 8)),  
     linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
-                            title.theme = element_text(size = 6),  
-                            label.theme = element_text(size = 6))  
+                            title.theme = element_text(size = 8),  
+                            label.theme = element_text(size = 8))  
   )
 c1_d1_ppt_annual
 
 ggsave(c1_d1_ppt_annual,
        filename = file.path(figures_dir, "c1_d1_annual_ppt.jpg"),
-       width = 12, height = 8, units = "in", dpi = 300,
+       width = 16, height = 16, units = "in", dpi = 300,
        scale = 0.5
 )
