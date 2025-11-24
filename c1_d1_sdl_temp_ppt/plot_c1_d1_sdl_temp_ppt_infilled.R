@@ -118,6 +118,7 @@ perform_trend_analysis <- function(data, value_col = "tot_ppt", year_col = "year
   }
   # Ensure data is sorted by year before trend analysis
   data <- data %>% arrange(!!sym(year_col))
+  
   # Mann-Kendall test
   mk_test <- mk.test(data[[value_col]])
   
@@ -153,7 +154,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
   # Filter data for the target season
   plot_data <- seasonal_data %>%
     filter(season == target_season) %>%
-    filter(site != "SDL") %>% #removing Saddle- may want to add back depending on your interest
+    filter(site != "SDL") %>% #Removes Saddle- add back depending on your interest
     left_join(trend_results %>% filter(season == target_season),
               by = c("site", "season")
     ) %>%
@@ -213,7 +214,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
   # Create main plot using tidy evaluation for dynamic y column
   p <- ggplot(plot_data, aes(x = year, y = !!sym(y_col), color = site)) +
     geom_point(alpha = 0.6, size = 1.5) +
-    geom_line(size = 1) +
+    geom_line(linewidth = 1) +
     geom_segment(
       data = trend_lines,
       aes(
@@ -221,7 +222,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
         xend = max_year, yend = y_end,
         color = site, linetype = significant
       ),
-      size = 1.2
+      linewidth = 1.2
     ) +
     scale_color_manual(values = site_colors, name = "Site",
                        labels = c(
@@ -711,7 +712,7 @@ c1_d1_temps <- ggplot(
   aes(x = year, y = mean_temp, color = site)
 ) +
   geom_point(alpha = 0.6, size = 1.5) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_segment(
     data = trend_segments %>%
       filter(site %in% c("C1", "D1") &
@@ -722,7 +723,7 @@ c1_d1_temps <- ggplot(
       xend = max_year, yend = y_end,
       color = site
     ),
-    size = 1.2
+    linewidth = 1.2
   ) +
   scale_color_manual(
     values = c("C1" = "#D55E00", "D1" = "#0072B2"),
@@ -979,13 +980,13 @@ legend_labels_annual <- c(
   "D1" = paste0("Alpine: +", round(d1_slope_annual, 3), "°C per year")
 )
 
-# Create the plot-- Annual Temperature for C1 and D1
-c1_d1_temps_annual <- ggplot(
+# Create the main plot with both legends
+c1_d1_temps_annual_main <- ggplot(
   temp_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = mean_temp, color = site)
 ) +
   geom_point(alpha = 0.6, size = 2.5) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_segment(
     data = trend_segments_annual %>%
       filter(site %in% c("C1", "D1")),
@@ -995,7 +996,7 @@ c1_d1_temps_annual <- ggplot(
       color = site,
       linetype = significant
     ),
-    size = 1.2
+    linewidth = 1.2
   ) +
   scale_color_manual(
     values = c("C1" = "#D55E00", "D1" = "#0072B2"),
@@ -1016,26 +1017,82 @@ c1_d1_temps_annual <- ggplot(
   theme(
     legend.position = "bottom",
     legend.box = "horizontal",
-    legend.text = element_text(size = 7),
-    legend.box.background = element_rect(color = "black", size = 0.5),  # Add box around legend
-    legend.box.margin = margin(6, 6, 6, 6),  # Add some padding
     plot.title = element_text(size = 14, face = "bold"),
     axis.title = element_text(size = 12),
     axis.text = element_text(size = 10)
   ) +
   guides(
-    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
+    color = guide_legend(order = 1, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 1,
                          title.theme = element_text(size = 8),  
                          label.theme = element_text(size = 8)),  
-    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
+    linetype = guide_legend(order = 2, nrow = 1, override.aes = list(linewidth = 1.2), keywidth = 2.5,
                             title.theme = element_text(size = 8),  
                             label.theme = element_text(size = 8))  
   )
 
-ggsave(c1_d1_temps_annual,
-       filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
-       width = 16, height = 12, units = "in", dpi = 300,
-       scale = 0.5
+# Extract just the site legend (color) for positioning inside plot
+temp_site_legend_plot <- ggplot(
+  temp_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
+  aes(x = year, y = mean_temp, color = site)
+) +
+  geom_point(alpha = 0.6, size = 2.5) +
+  geom_line() +
+  scale_color_manual(
+    values = c("C1" = "#D55E00", "D1" = "#0072B2"),
+    labels = legend_labels_annual,
+    name = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.background = element_rect(fill = "white", color = "black", size = 0.5),
+    legend.margin = margin(6, 6, 6, 6)
+  ) +
+  guides(color = guide_legend(
+    override.aes = list(linewidth = 1.2, alpha = 0.6, size = 2.5), 
+    label.theme = element_text(size = 8)
+  ))
+
+site_legend_temp <- get_legend(temp_site_legend_plot)
+
+# Extract just the significance legend (linetype) for bottom
+temp_sig_legend_plot <- ggplot(
+  data.frame(x = 1:2, y = 1:2, sig = factor(c("Significant", "Non-significant"), 
+                                            levels = c("Significant", "Non-significant"))),
+  aes(x = x, y = y, linetype = sig)
+) +
+  geom_line() +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall\nSignificance"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  guides(linetype = guide_legend(nrow = 1, override.aes = list(linewidth = 1.2), 
+                                 keywidth = 2.5,
+                                 title.theme = element_text(size = 8),
+                                 label.theme = element_text(size = 8)))
+
+sig_legend_temp <- get_legend(temp_sig_legend_plot)
+
+# Create plot without legend
+c1_d1_temps_annual_no_legend <- c1_d1_temps_annual_main + theme(legend.position = "none")
+
+# Add the site legend inside the plot at bottom-right
+c1_d1_temps_annual <- c1_d1_temps_annual_no_legend +
+  annotation_custom(
+    grob = site_legend_temp,
+    xmin = 2010, xmax = 2025,  # Adjust these coordinates as needed
+    ymin = -7, ymax = -5      # Adjust these coordinates as needed
+  )
+
+# Save with the arrangement: plot + significance legend at bottom
+ggsave(
+  filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
+  plot = grid.arrange(c1_d1_temps_annual, sig_legend_temp, 
+                      nrow = 2, heights = c(5, 0.5)),
+  width = 16, height = 16, units = "in", dpi = 300,
+  scale = 0.5
 )
 
 # Annual precipitation simple plot for C1 and D1 --------------------------------
@@ -1083,7 +1140,7 @@ c1_d1_ppt_annual_main <- ggplot(
   aes(x = year, y = tot_ppt, color = site)
 ) +
   geom_point(alpha = 0.6, size = 2.5) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_segment(
     data = trend_segments_annual_ppt %>%
       filter(site %in% c("C1", "D1")),
@@ -1093,7 +1150,7 @@ c1_d1_ppt_annual_main <- ggplot(
       color = site,
       linetype = significant
     ),
-    size = 1.2
+    linewidth = 1.2
   ) +
   scale_color_manual(
     values = c("C1" = "#D55E00", "D1" = "#0072B2"),
@@ -1122,7 +1179,7 @@ c1_d1_ppt_annual_main <- ggplot(
     color = guide_legend(order = 1, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 1,
                          title.theme = element_text(size = 8),  
                          label.theme = element_text(size = 8)),  
-    linetype = guide_legend(order = 2, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
+    linetype = guide_legend(order = 2, nrow = 1, override.aes = list(linewidth = 1.2), keywidth = 2.5,
                             title.theme = element_text(size = 8),  
                             label.theme = element_text(size = 8))  
   )
@@ -1132,7 +1189,7 @@ ppt_site_legend_plot <- ggplot(
   ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = tot_ppt, color = site)
 ) +
-  geom_point(size = 2.5) +
+  geom_point(alpha = 0.6, size = 2.5) +
   geom_line() +
   scale_color_manual(
     values = c("C1" = "#D55E00", "D1" = "#0072B2"),
