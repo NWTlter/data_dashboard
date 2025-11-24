@@ -844,3 +844,225 @@ ggsave(anom_ppt_annual_d1_plot,
        file = file.path(figures_dir, "d1_ppt_anom_annual.png"),
   scale = 0.5, width = 8, height = 6
 )
+
+######### Annual mean temp and precipitation graphs####################
+# Create annual aggregations for both C1 and D1 sites --------------------------
+ppt_annual_c1_d1 <- ppt_seasonal %>%
+  filter(site %in% c("C1", "D1")) %>%
+  group_by(site, year) %>%
+  summarize(tot_ppt = sum(tot_ppt, na.rm = TRUE), .groups = "drop")
+
+# Recalculate annual temperature from daily data for both C1 and D1
+temp_annual_c1_d1 <- read_csv(file.path(data_dir, "d1_infilled_temp_daily.tk.data.csv"),
+                              guess_max = 100000
+) %>%
+  bind_rows(., read_csv(file.path(data_dir, "c1_infilled_temp_daily.tk.data.csv"),
+                        guess_max = 100000
+  )) %>%
+  mutate(
+    month = lubridate::month(date),
+    year = lubridate::year(date),
+    mean_temp = (min_temp + max_temp) / 2
+  ) %>%
+  rename(site = local_site) %>%
+  filter(site %in% c("C1", "D1")) %>%
+  group_by(site, year) %>%
+  summarize(mean_temp = mean(mean_temp, na.rm = TRUE), .groups = "drop")
+
+# Calculate annual trends for both C1 and D1 sites -----------------------------
+trend_results_ppt_annual_c1_d1 <- ppt_annual_c1_d1 %>%
+  group_by(site) %>%
+  do(perform_trend_analysis(., value_col = "tot_ppt", year_col = "year")) %>%
+  ungroup() %>%
+  mutate(season = "annual")
+
+trend_results_temp_annual_c1_d1 <- temp_annual_c1_d1 %>%
+  group_by(site) %>%
+  do(perform_trend_analysis(., value_col = "mean_temp", year_col = "year")) %>%
+  ungroup() %>%
+  mutate(season = "annual")
+
+# Annual temp simple plot for C1 and D1 ----------------------------------------
+# Create the thiel sen slope segments for annual data
+trend_segments_annual <- trend_results_temp_annual_c1_d1 %>%
+  mutate(
+    # Create significance flag for line types
+    significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
+    # Handle cases where significance is NA
+    significant = ifelse(is.na(significant), "Insufficient data", significant)
+  ) %>%
+  filter(!is.na(ts_slope) & !is.na(ts_intercept)) %>%
+  # Join with actual data to get each site's year range
+  left_join(
+    temp_annual_c1_d1 %>%
+      group_by(site) %>%
+      summarize(
+        min_year = min(year, na.rm = TRUE),
+        max_year = max(year, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = "site"
+  ) %>%
+  mutate(
+    y_start = ts_intercept + ts_slope * min_year,
+    y_end = ts_intercept + ts_slope * max_year
+  )
+
+# Get slope data for both sites
+slope_data_annual <- trend_results_temp_annual_c1_d1 %>%
+  select(site, ts_slope, mk_pvalue)
+
+# Create labels with slope values
+c1_slope_annual <- slope_data_annual$ts_slope[slope_data_annual$site == "C1"]
+d1_slope_annual <- slope_data_annual$ts_slope[slope_data_annual$site == "D1"]
+
+legend_labels_annual <- c(
+  "C1" = paste0("Subalpine +", round(c1_slope_annual, 3), " °C per year"),
+  "D1" = paste0("Alpine +", round(d1_slope_annual, 3), " °C per year")
+)
+
+# Create the plot-- Annual Temperature for C1 and D1
+c1_d1_temps_annual <- ggplot(
+  temp_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
+  aes(x = year, y = mean_temp, color = site)
+) +
+  geom_point() +
+  geom_line() +
+  geom_segment(
+    data = trend_segments_annual %>%
+      filter(site %in% c("C1", "D1")),
+    aes(
+      x = min_year, y = y_start,
+      xend = max_year, yend = y_end,
+      color = site,
+      linetype = significant
+    ),
+    size = 1.2
+  ) +
+  scale_color_manual(
+    values = c("C1" = "#D55E00", "D1" = "#0072B2"),
+    labels = legend_labels_annual,
+    name = "Site"
+  ) +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall\nSignificance"
+  ) +
+  scale_x_continuous(breaks = seq(1950, 2030, by = 10)) +
+  labs(
+    title = "Annual mean temperature on Niwot Ridge by biome",
+    x = "Year",
+    y = "Temperature (°C)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.text = element_text(size = 7),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  guides(
+    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1),
+    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5)
+  )
+
+ggsave(c1_d1_temps_annual,
+       filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
+       width = 12, height = 8, units = "in", dpi = 300,
+       scale = 0.5
+)
+
+# Annual precipitation simple plot for C1 and D1 --------------------------------
+# Create the thiel sen slope segments for annual precipitation data
+trend_segments_annual_ppt <- trend_results_ppt_annual_c1_d1 %>%
+  mutate(
+    # Create significance flag for line types
+    significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
+    # Handle cases where significance is NA
+    significant = ifelse(is.na(significant), "Insufficient data", significant)
+  ) %>%
+  filter(!is.na(ts_slope) & !is.na(ts_intercept)) %>%
+  # Join with actual data to get each site's year range
+  left_join(
+    ppt_annual_c1_d1 %>%
+      group_by(site) %>%
+      summarize(
+        min_year = min(year, na.rm = TRUE),
+        max_year = max(year, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = "site"
+  ) %>%
+  mutate(
+    y_start = ts_intercept + ts_slope * min_year,
+    y_end = ts_intercept + ts_slope * max_year
+  )
+
+# Get slope data for both sites
+slope_data_annual_ppt <- trend_results_ppt_annual_c1_d1 %>%
+  select(site, ts_slope, mk_pvalue)
+
+# Create labels with slope values
+c1_slope_annual_ppt <- slope_data_annual_ppt$ts_slope[slope_data_annual_ppt$site == "C1"]
+d1_slope_annual_ppt <- slope_data_annual_ppt$ts_slope[slope_data_annual_ppt$site == "D1"]
+
+legend_labels_annual_ppt <- c(
+  "C1" = paste0("Subalpine +", round(c1_slope_annual_ppt, 3), " mm per year"),
+  "D1" = paste0("Alpine +", round(d1_slope_annual_ppt, 3), " mm per year")
+)
+
+# Create the plot
+c1_d1_ppt_annual <- ggplot(
+  ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
+  aes(x = year, y = tot_ppt, color = site)
+) +
+  geom_point() +
+  geom_line() +
+  geom_segment(
+    data = trend_segments_annual_ppt %>%
+      filter(site %in% c("C1", "D1")),
+    aes(
+      x = min_year, y = y_start,
+      xend = max_year, yend = y_end,
+      color = site,
+      linetype = significant
+    ),
+    size = 1.2
+  ) +
+  scale_color_manual(
+    values = c("C1" = "#D55E00", "D1" = "#0072B2"),
+    labels = legend_labels_annual_ppt,
+    name = "Site"
+  ) +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall\nSignificance"
+  ) +
+  scale_x_continuous(breaks = seq(1950, 2030, by = 10)) +
+  labs(
+    title = "Annual precipitation on Niwot Ridge by biome",
+    x = "Year",
+    y = "Precipitation (mm)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.text = element_text(size = 7),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  guides(
+    color = guide_legend(order = 1, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 1),
+    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5)
+  )
+c1_d1_ppt_annual
+
+ggsave(c1_d1_ppt_annual,
+       filename = file.path(figures_dir, "c1_d1_annual_ppt.jpg"),
+       width = 12, height = 8, units = "in", dpi = 300,
+       scale = 0.5
+)
