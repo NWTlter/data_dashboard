@@ -1077,8 +1077,8 @@ legend_labels_annual_ppt <- c(
   "D1" = paste0("Alpine: +", round(d1_slope_annual_ppt, 3), "mm per year")
 )
 
-# Create the plot
-c1_d1_ppt_annual <- ggplot(
+# Create the main plot with both legends
+c1_d1_ppt_annual_main <- ggplot(
   ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
   aes(x = year, y = tot_ppt, color = site)
 ) +
@@ -1114,25 +1114,77 @@ c1_d1_ppt_annual <- ggplot(
   theme(
     legend.position = "bottom",
     legend.box = "horizontal",
-    legend.text = element_text(size = 7),
-    legend.box.background = element_rect(color = "black", size = 0.5),  # Add box around legend
-    legend.box.margin = margin(6, 6, 6, 6),  # Add some padding
     plot.title = element_text(size = 14, face = "bold"),
     axis.title = element_text(size = 12),
     axis.text = element_text(size = 10)
   ) +
   guides(
-    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
+    color = guide_legend(order = 1, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 1,
                          title.theme = element_text(size = 8),  
                          label.theme = element_text(size = 8)),  
-    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
+    linetype = guide_legend(order = 2, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
                             title.theme = element_text(size = 8),  
                             label.theme = element_text(size = 8))  
   )
-c1_d1_ppt_annual
 
-ggsave(c1_d1_ppt_annual,
-       filename = file.path(figures_dir, "c1_d1_annual_ppt.jpg"),
-       width = 16, height = 16, units = "in", dpi = 300,
-       scale = 0.5
+# Extract just the site legend (color) for positioning inside plot
+ppt_site_legend_plot <- ggplot(
+  ppt_annual_c1_d1 %>% filter(site %in% c("C1", "D1")),
+  aes(x = year, y = tot_ppt, color = site)
+) +
+  geom_point(size = 2.5) +
+  geom_line() +
+  scale_color_manual(
+    values = c("C1" = "#D55E00", "D1" = "#0072B2"),
+    labels = legend_labels_annual_ppt,
+    name = NULL
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right",
+        legend.background = element_rect(fill = "white", color = "black", size = 0.5),
+        legend.margin = margin(6, 6, 6, 6)) +
+  guides(color = guide_legend(override.aes = list(linewidth = 1.2, alpha= 0.6, size=2.5), 
+                              title.theme = element_text(size = 8),
+                              label.theme = element_text(size = 8)))
+
+site_legend_ppt <- get_legend(ppt_site_legend_plot)
+
+# Extract just the significance legend (linetype) for bottom
+ppt_sig_legend_plot <- ggplot(
+  data.frame(x = 1:2, y = 1:2, sig = factor(c("Significant", "Non-significant"), 
+                                            levels = c("Significant", "Non-significant"))),
+  aes(x = x, y = y, linetype = sig)
+) +
+  geom_line() +
+  scale_linetype_manual(
+    values = c("Significant" = "solid", "Non-significant" = "dashed"),
+    name = "Mann-Kendall\nSignificance"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  guides(linetype = guide_legend(nrow = 1, override.aes = list(linewidth = 1.2), 
+                                 keywidth = 2.5,
+                                 title.theme = element_text(size = 8),
+                                 label.theme = element_text(size = 8)))
+
+sig_legend_ppt <- get_legend(ppt_sig_legend_plot)
+
+# Create plot without legend
+c1_d1_ppt_annual_no_legend <- c1_d1_ppt_annual_main + theme(legend.position = "none")
+
+# Add the site legend inside the plot at bottom-right
+c1_d1_ppt_annual <- c1_d1_ppt_annual_no_legend +
+  annotation_custom(
+    grob = site_legend_ppt,
+    xmin = 2010, xmax = 2025,  # Adjust these coordinates as needed
+    ymin = 400, ymax = 550     # Adjust these coordinates as needed
+  )
+
+# Save with the arrangement: plot + significance legend at bottom
+ggsave(
+  filename = file.path(figures_dir, "c1_d1_annual_ppt.jpg"),
+  plot = grid.arrange(c1_d1_ppt_annual, sig_legend_ppt, 
+                      nrow = 2, heights = c(5, 0.5)),
+  width = 16, height = 16, units = "in", dpi = 300,
+  scale = 0.5
 )
