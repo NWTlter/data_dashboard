@@ -221,7 +221,7 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     theme_classic() +
     theme(
       legend.text=element_text(size=8),
-      legend.position = "bottom",
+      legend.position = if(!include_table) "none" else "bottom",
       legend.box = "horizontal",
       plot.title = element_text(size = 14, face = "bold"),
       axis.title = element_text(size = 12),
@@ -493,19 +493,29 @@ print("All seasonal plots saved to figures folder!")
 
 # Combined plots ---------------------------------------------------------------
 
-# Create a temporary plot with legend just for extraction
+# Create a temporary plot with legend just for extraction for Temperature (3 sites)
 if(!is.null(dev.list())) dev.off()
 
 temp_plot_with_legend <- ggplot(temp_seasonal %>% filter(season == "summer") %>% 
                                 mutate(site=factor(site, levels= c("C1", "D1", "SDL"))),
-                                aes(x = year, y = mean_temp, color = site, linetype = site)) +
+                                aes(x = year, y = mean_temp, color = site)) +
   geom_line() +
   scale_color_manual(values = site_colors, 
                      name = "Site",
                      labels = c("C1" = "Subalpine", "D1" = "Alpine", "SDL" = "Saddle")) +
-  scale_linetype_manual(values = site_linetypes,
-                        name = "Site",
-                        labels = c("C1" = "Subalpine", "D1" = "Alpine", "SDL" = "Saddle")) +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        legend.box = "horizontal") +
+  guides(color = guide_legend(override.aes = list(linewidth = 1)))
+
+# Create a temporary plot with legend for PRECIPITATION (2 sites only)
+ppt_plot_with_legend <- ggplot(ppt_seasonal %>% filter(season == "summer") %>% 
+                                 mutate(site=factor(site, levels= c("C1", "D1"))),
+                               aes(x = year, y = tot_ppt, color = site)) +
+  geom_line() +
+  scale_color_manual(values = site_colors[c("C1", "D1")], 
+                     name = "Site",
+                     labels = c("C1" = "Subalpine", "D1" = "Alpine")) +
   theme_classic() +
   theme(legend.position = "bottom",
         legend.box = "horizontal") +
@@ -520,7 +530,7 @@ get_legend <- function(plot) {
 }
 
 shared_legend_temp <- get_legend(temp_plot_with_legend)
-shared_legend_ppt <- get_legend(temp_plot_with_legend)
+shared_legend_ppt <- get_legend(ppt_plot_with_legend)
 
 
 #Temperature Plots- Combined figure
