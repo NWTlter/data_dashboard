@@ -160,7 +160,9 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       # Create significance flag for line types
       significant = ifelse(mk_pvalue < 0.05, "Significant", "Non-significant"),
       # Handle cases where significance is NA
-      significant = ifelse(is.na(significant), "Insufficient data", significant)
+      significant = ifelse(is.na(significant), "Insufficient data", significant),
+      #Make it a factor with all levels defined
+      significant=factor(significant, levels = c("Significant", "Non-significant"))
     )
   
   # Calculate trend lines for each site's data range
@@ -177,10 +179,30 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     ) %>%
     mutate(
       y_start = ts_intercept + ts_slope * min_year,
-      y_end = ts_intercept + ts_slope * max_year
+      y_end = ts_intercept + ts_slope * max_year,
+      # Make it a factor with all levels defined
+      significant = factor(significant, levels = c("Significant", "Non-significant")) 
     )
   #%>%
-    #filter(significant=="Significant") #this will keep only significant trends; a line will be drawn for only significant trends
+  
+  # Create dummy data to ensure both significance levels appear in legend
+  dummy_year <- min(plot_data$year, na.rm = TRUE)
+  dummy_y <- min(plot_data[[y_col]], na.rm = TRUE)
+  
+  dummy_trend <- data.frame(
+    min_year = rep(dummy_year, 2),
+    max_year = rep(dummy_year, 2),  # Same as min_year so length = 0
+    y_start = rep(dummy_y, 2),
+    y_end = rep(dummy_y, 2),  # Same as y_start so length = 0
+    ts_slope = rep(0, 2),
+    ts_intercept = rep(0, 2),
+    site = rep(plot_data$site[1], 2),
+    significant = factor(c("Significant", "Non-significant"), 
+                         levels = c("Significant", "Non-significant"))
+  )
+  
+  # Add dummy data to trend_lines
+  trend_lines <- bind_rows(trend_lines, dummy_trend)
   
   # Create the plot title
   if (is.null(plot_title)) {
@@ -210,10 +232,13 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     scale_linetype_manual(
      values = c(
       "Significant" = "solid",
-      "Non-significant" = "dashed",
-     "Insufficient data" = "dotted"
+      "Non-significant" = "dashed"
+    # "Insufficient data" = "dotted" (This does not appear on these datasets)
      ),
      name = "Mann-Kendall\nSignificance",
+     limits = c("Significant", "Non-significant"),
+     drop = FALSE,
+    breaks = c("Significant", "Non-significant")
      ) +
     ggtitle(plot_title) +
     ylab(y_label) +
@@ -223,13 +248,19 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
       legend.text=element_text(size=8),
       legend.position = if(!include_table) "none" else "bottom",
       legend.box = "horizontal",
+      legend.box.background = element_rect(color = "black", size = 0.5),  
+      legend.box.margin = margin(6, 6, 6, 6), 
       plot.title = element_text(size = 14, face = "bold"),
       axis.title = element_text(size = 12),
       axis.text = element_text(size = 10)
     ) +
     guides(
-      color = guide_legend(order=1, override.aes = list(size = 1.2), keywidth = 1),
-      linetype = guide_legend(order=2, override.aes = list(size = 1.2), keywidth = 2.5)
+      color = guide_legend(order=1, nrow = length(unique(plot_data$site)), override.aes = list(size = 1.2), keywidth = 1,
+                           title.theme = element_text(size = 6),  
+                           label.theme = element_text(size = 6)),
+      linetype = guide_legend(order=2, nrow = 2, override.aes = list(size = 1.2, linetype = c("solid", "dashed")), keywidth = 2.5,
+                              title.theme = element_text(size = 6),  
+                              label.theme = element_text(size = 6))
     )
   
   # Return early if table is not needed
@@ -266,10 +297,10 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
   inset_data[[paste0("Slope (", slope_units, ")")]] <- slope_data$display_text
   inset_data[["p-value"]] <- slope_data$p_round
   
-  # Create table grob
+  # Create table Grob
   table_grob <- tableGrob(inset_data,
                           rows = NULL,
-                          theme = ttheme_minimal(
+                          theme = ttheme_default(
                             core = list(
                               fg_params = list(cex = 0.8),
                               bg_params = list(fill = "white", alpha = 0.8)
@@ -298,16 +329,42 @@ create_seasonal_plot <- function(seasonal_data, trend_results, target_season,
     )
   }
   
+  # Extract the legend from the plot
+  tmp <- ggplot_gtable(ggplot_build(p))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend_grob <- tmp$grobs[[leg]]
   
-  #Add the table with control over spacing
+  # Remove legend from the main plot
+  p_no_legend <- p + theme(legend.position = "none")
+  
+  # Create spacers for centering
+  spacer_left <- rectGrob(gp = gpar(col = NA, fill = NA))
+  spacer_right <- rectGrob(gp = gpar(col = NA, fill = NA))
+  
+  # Create a combined grob with legend and table side by side, centered
+  bottom_row <- arrangeGrob(spacer_left, legend_grob, table_grob, spacer_right, 
+                            ncol = 4, widths = c(0.5, 3, 2, 0.5))
+  
+  # Combine plot and bottom row
   p_with_table <- grid.arrange(
-    p,
-    table_grob,
+    p_no_legend,
+    bottom_row,
     nrow = 2,
-    heights = c(5, 1)  # Ratio of 5:1 (plot taller than table)
+    heights = c(5, 1)  # Ratio of 5:1 (plot taller than bottom elements)
   )
   return(p_with_table)
 }
+  
+  ####
+  #Add the table with control over spacing
+  #p_with_table <- grid.arrange(
+  #  p,
+   # table_grob,
+   # ncol = 2,
+  #  heights = c(3, 1)  # Ratio of 5:1 (plot taller than table)
+ # )
+  #return(p_with_table)
+#}
 
 
 # Read and merge ppt and temp datasets --------------------------------------------------
@@ -959,13 +1016,19 @@ c1_d1_temps_annual <- ggplot(
     legend.position = "bottom",
     legend.box = "horizontal",
     legend.text = element_text(size = 7),
+    legend.box.background = element_rect(color = "black", size = 0.5),  # Add box around legend
+    legend.box.margin = margin(6, 6, 6, 6),  # Add some padding
     plot.title = element_text(size = 14, face = "bold"),
     axis.title = element_text(size = 12),
     axis.text = element_text(size = 10)
   ) +
   guides(
-    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1),
-    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5)
+    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
+                         title.theme = element_text(size = 6),  
+                         label.theme = element_text(size = 6)),  
+    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
+                            title.theme = element_text(size = 6),  
+                            label.theme = element_text(size = 6))  
   )
 
 ggsave(c1_d1_temps_annual,
@@ -1051,13 +1114,19 @@ c1_d1_ppt_annual <- ggplot(
     legend.position = "bottom",
     legend.box = "horizontal",
     legend.text = element_text(size = 7),
+    legend.box.background = element_rect(color = "black", size = 0.5),  # Add box around legend
+    legend.box.margin = margin(6, 6, 6, 6),  # Add some padding
     plot.title = element_text(size = 14, face = "bold"),
     axis.title = element_text(size = 12),
     axis.text = element_text(size = 10)
   ) +
   guides(
-    color = guide_legend(order = 1, nrow = 2, override.aes = list(linewidth = 1.2), keywidth = 1),
-    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5)
+    color = guide_legend(order = 1, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 1,
+                         title.theme = element_text(size = 6),  
+                         label.theme = element_text(size = 6)),  
+    linetype = guide_legend(order = 2, nrow=2, override.aes = list(linewidth = 1.2), keywidth = 2.5,
+                            title.theme = element_text(size = 6),  
+                            label.theme = element_text(size = 6))  
   )
 c1_d1_ppt_annual
 
