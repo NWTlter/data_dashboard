@@ -643,7 +643,7 @@ d1_slope <- slope_data$ts_slope[slope_data$site == "D1"]
 
 legend_labels <- c(
   "C1" = paste0("Subalpine +", round(c1_slope, 3), " °C per year"),
-  "D1" = paste0("Tundra + ", round(d1_slope, 3), " °C per year")
+  "D1" = paste0("Alpine +", round(d1_slope, 3), " °C per year")
 )
 
 
