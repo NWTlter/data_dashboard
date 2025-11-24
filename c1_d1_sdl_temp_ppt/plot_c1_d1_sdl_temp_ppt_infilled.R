@@ -1034,7 +1034,7 @@ c1_d1_temps_annual <- ggplot(
 
 ggsave(c1_d1_temps_annual,
        filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
-       width = 16, height = 14, units = "in", dpi = 300,
+       width = 16, height = 12, units = "in", dpi = 300,
        scale = 0.5
 )
 
