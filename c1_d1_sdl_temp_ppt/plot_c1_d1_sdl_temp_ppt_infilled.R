@@ -1164,7 +1164,7 @@ ggsave(
   filename = file.path(figures_dir, "c1_d1_annual_mean_temp.jpg"),
   plot = grid.arrange(c1_d1_temps_annual, sig_legend_temp, 
                       nrow = 2, heights = c(5, 0.5)),
-  width = 16, height = 16, units = "in", dpi = 300,
+  width = 16, height = 12, units = "in", dpi = 300,
   scale = 0.5
 )
 
@@ -1307,7 +1307,7 @@ c1_d1_ppt_annual <- c1_d1_ppt_annual_no_legend +
   annotation_custom(
     grob = site_legend_ppt,
     xmin = 2010, xmax = 2025,  # Adjust these coordinates as needed
-    ymin = 400, ymax = 550     # Adjust these coordinates as needed
+    ymin = 350, ymax = 500     # Adjust these coordinates as needed
   )
 
 # Save with the arrangement: plot + significance legend at bottom
@@ -1315,6 +1315,6 @@ ggsave(
   filename = file.path(figures_dir, "c1_d1_annual_ppt.jpg"),
   plot = grid.arrange(c1_d1_ppt_annual, sig_legend_ppt, 
                       nrow = 2, heights = c(5, 0.5)),
-  width = 16, height = 16, units = "in", dpi = 300,
+  width = 16, height = 12, units = "in", dpi = 300,
   scale = 0.5
 )
