@@ -12,7 +12,7 @@ library(brms) # gap fill snowmelt dates
 library(EDIutils) # Handy tools for interacting with EDI's API
 
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
 
 #slow to run, might want to run only once
 run_bayesian_models <-FALSE
@@ -233,9 +233,7 @@ fit_cens <- brm(y | cens(censored, snowmelt_c) ~ 1 + (1 | grid_pt) + (1 | year),
                 data = snow_cens, iter = 20000, cores = 4
 )
 
-saveRDS (fit_cens, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens.rds' ) 
-#I think we need to update this using file.path, but I don't want to mess this up.
-
+saveRDS (file.path('sdl_snow', 'big_bayesian_files', 'fit_cens_snow_cens.rds')) 
 
 # Center to make modeling happy
 mn_2 <- mean(c(snow_cens_2$snowmelt_adj, snow_cens_2$last_snow_adj), na.rm = TRUE)
@@ -272,13 +270,12 @@ snow_cens_2 <- snow_cens_2 %>%
 fit_cens_2 <- brm(y | cens(censored, snowmelt_c) ~ 1 + (1 | grid_pt) + (1 | year),
                   data = snow_cens_2, iter = 20000, cores = 4)
 
-saveRDS (fit_cens_2, 'sdl_snow/big_bayesian_files/fit_cens_snow_cens_2.rds' )
+saveRDS (file.path('sdl_snow', 'big_bayesian_files', 'fit_cens_snow_cens_2.rds'))
 
 }
 
 # Read in the bayesian model results and continue ------------------------------
-fit_cens_2 <-readRDS('sdl_snow/big_bayesian_files/fit_cens_snow_cens_2.rds')
-#The above also needs to be updated to use file.path(), I think
+fit_cens_2 <-readRDS(file.path('sdl_snow','big_bayesian_files', 'fit_cens_snow_cens_2.rds'))
 
 # Predictions
 pp_2 <- predict(fit_cens_2, newdata = snow_cens_2)
@@ -324,6 +321,5 @@ pp_2 <- pp_2 %>%
 
 write.csv(pp_2 %>%
             select(year, grid_pt,last_snow_adj, snowmelt_adj, snowmelt_est, Estimate, Est.Error, Q2.5, Q97.5),
-          file = 'sdl_snow/data_deriv/snowmelt_est_adj.csv',
+          file = file.path('sdl_snow', 'data_deriv', 'snowmelt_est_adj.csv'),
           row.names = FALSE)
-# We may need to update to file path here too. 
