@@ -1,5 +1,5 @@
-# Analyzes and visualizes subalpine (C1) data (SWE and day of last snowmelt)
-# Last updated 12/15/2025
+# Analyzes and visualizes subalpine data from the University Camp snotel site @ 10,330ft. Figures visualize SWE (max day and mm),  day of last snowmelt, and fraction of melt pre max SWE.
+# Last updated 1/21/2026
 
 # setup
 library(tidyverse)
