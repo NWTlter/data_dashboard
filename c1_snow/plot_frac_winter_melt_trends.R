@@ -2,6 +2,7 @@
 # Last updated 1/21/2026
 
 # setup
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
 library(tidyverse)
 library(snotelr)
 library(EDIutils) # Handy tools for interacting with EDI's API
@@ -12,7 +13,7 @@ library(grid)
 
 
 # only need to download once
-download_data_snotel <- FALSE
+download_data_snotel <- TRUE
 download_data_c1 <- FALSE
 
 data_dir <- file.path("c1_snow", "data")
@@ -346,6 +347,13 @@ if (!file.exists(snotel_file)) {
 
 snow_data_snotel <- read_csv(snotel_file)
 
+# one missing value but it's july and 0 long before and after
+snow_data_snotel <- snow_data_snotel %>%
+  arrange(date) %>%
+  # one missing value but it's july and 0 long before and after
+  mutate(
+    snow_water_equivalent = ifelse(date == "2022-07-16", 0, snow_water_equivalent))
+
 
 # check what dates avail
 range(snow_data_snotel$date[!is.na(snow_data_snotel$snow_water_equivalent)]) # so only water year 1980 - 2025ish good for snow at this point
@@ -355,6 +363,7 @@ range(snow_data_snotel$date[!is.na(snow_data_snotel$snow_water_equivalent)]) # s
 # note this only runs if 365d in the year
 # to the last/partial year will be cut off
 snow_phenology_snotel <- snotel_phenology(snow_data_snotel)
+
 
 # add the current year we are in if you wish
 # max_2025<-max(snow_data_snotel$snow_water_equivalent[snow_data_snotel$date >= '2025-01-01'])
@@ -387,11 +396,25 @@ snow_phenology_snotel <- snotel_phenology(snow_data_snotel)
 # of the total annual melt and to ensure that any late-lying snow (almost
 # always gone by August at sensor locations) was recorded as annual melt.
 
+valid_water_yrs <- snow_data_snotel %>%
+  filter(!is.na(snow_water_equivalent)) %>%
+  arrange(date) %>%
+  mutate(
+  year = lubridate::year(date),
+month = lubridate::month(date),
+water_year = ifelse(month >= 10, year + 1, year)
+) %>%
+  group_by(water_year) %>%
+  summarize(
+    n_days = n(),
+    .groups = "drop"
+  ) %>%
+  filter(n_days >= 365) 
+
 frac_pre_swe <- snow_data_snotel %>%
   arrange(date) %>%
   # one missing value but it's july and 0 long before and after
   mutate(
-    snow_water_equivalent = ifelse(date == "2022-07-16", 0, snow_water_equivalent),
     melt = snow_water_equivalent - lag(snow_water_equivalent, 1),
     melt = ifelse(melt > 0 & !is.na(melt), 0, melt),
     year = lubridate::year(date),
@@ -400,13 +423,13 @@ frac_pre_swe <- snow_data_snotel %>%
     water_year = ifelse(month >= 10, year + 1, year)
   ) %>%
   inner_join(., snow_phenology_snotel) %>%
-  filter(water_year >= 1980 & water_year < 2025) %>%
+  filter(water_year %in% valid_water_yrs$water_year) %>%
   mutate(bef = ifelse(doy < max_swe_doy | month >= 10, "bef", "after")) %>%
   # per keith's methods 0 out any melt in Aug, Sept
   # this doesn't actually matter here...
   mutate(melt = ifelse(month %in% c(8, 9), 0, melt)) %>%
   group_by(bef, water_year) %>%
-  summarize(melt_acc = -1 * sum(melt)) %>%
+  summarize(melt_acc = -1 * sum(melt), .groups = 'drop') %>%
   pivot_wider(names_from = bef, values_from = melt_acc) %>%
   mutate(
     tot = after + bef,
@@ -428,7 +451,7 @@ prior_melt_apr_1 <- snow_data_snotel %>%
     water_year = ifelse(month >= 10, year + 1, year)
   ) %>%
   inner_join(., snow_phenology_snotel) %>%
-  filter(water_year >= 1980 & water_year < 2025) %>%
+  filter(water_year %in% valid_water_yrs$water_year) %>%
   mutate(bef = ifelse(month <= 3 | month >= 10, "bef", "after")) %>%
   # per keith's methods 0 out any melt in Aug, Sept
   # this doesn't actually matter here...
@@ -608,6 +631,14 @@ create_individual_snow_plot <- function(data, trend_result, y_col, y_label, plot
   return(list(plot = plot_with_legend, sig_legend = sig_legend))
 }
 
+# Extract legend from one plot
+get_legend <- function(plot) {
+  tmp <- ggplot_gtable(ggplot_build(plot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
 # Create all individual plots
 max_swe_doy_result <- create_individual_snow_plot(
   data = snow_phenology_snotel,
@@ -645,14 +676,6 @@ frac_pre_result <- create_individual_snow_plot(
   slope_units = "% per year"
 )
 
-
-# Extract legend from one plot
-get_legend <- function(plot) {
-  tmp <- ggplot_gtable(ggplot_build(plot))
-  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
-  legend <- tmp$grobs[[leg]]
-  return(legend)
-}
 
 # Save all individual plots to figures folder
 if (!is.null(dev.list())) dev.off() # Close any open devices
