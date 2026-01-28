@@ -185,8 +185,7 @@ ggsave(g1,
   file = file.path("sdl_veg", "figures", "sdl_veg.jpg"),
   scale = 0.8, width = 10, height = 6, dpi = 600
 )
-
-# version that shows absolute cover by growth form
+# version that shows absolute cover by growth form (with extra headroom per panel)
 g2 <- anom_growth_form |>
   ggplot(aes(x = year, y = mean_cover, fill = growth_habit)) +
   geom_col(width = 0.75, alpha = 0.95, color = NA) +
@@ -201,6 +200,8 @@ g2 <- anom_growth_form |>
     ),
     guide = "none"
   ) +
+  # add ~5% whitespace above the top of each panel
+  scale_y_continuous(expand = expansion(mult = c(0, 0.23))) +
   labs(y = "Percent cover", x = "") +
   theme_hc() +
   facet_wrap(~growth_habit, scales = "free_y") +
@@ -219,5 +220,17 @@ ggsave(g2,
   file = file.path("sdl_veg", "figures", "sdl_veg_abs.jpg"),
   scale = 0.8, width = 10, height = 6, dpi = 600
 )
+
+ggsave(g2 + facet_wrap(~growth_habit, scales = "free_y", nrow = 1),
+       file = file.path("sdl_veg", "figures", "sdl_veg_abs_horizontal.jpg"),
+       scale = 0.8, width = 10, height = 3, dpi = 600
+)
+
+ggsave(g2 + facet_wrap(~growth_habit, scales = "free_y", ncol = 1),
+       file = file.path("sdl_veg", "figures", "sdl_veg_abs_vertical.jpg"),
+       scale = 0.8, width = 3, height = 10, dpi = 600
+)
+
+
 
 g2
