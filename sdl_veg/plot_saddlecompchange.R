@@ -10,12 +10,15 @@
 rm(list = ls())
 library(tidyverse)
 library(svglite)
+library(EDIutils)
+library(lemon)
+library(ggthemes)
 options(stringsAsFactors = F)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
 
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
 
 # download data -----------------------------------------------------------
 # note if you have already downloaded SOME data the read_data_package_archive
@@ -40,7 +43,7 @@ if (download_data) {
     # download the data
     read_data_package_archive(packageID, path = "sdl_veg/data")
     print(read_data_package_citation(packageID))
-    
+
     # "Walker, M., H. Humphries, and Niwot Ridge LTER. 2025. Plant species composition data for Saddle grid, 1989 - ongoing. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/1427abaa317306bd0524046c0276b708. Accessed 2025-08-14."
     # "Smith, J., H. Humphries, M. Walker, and Niwot Ridge LTER. 2025. Plant species list for Niwot Ridge and Green Lakes Valley, 1970 - ongoing. ver 3. Environmental Data Initiative. https://doi.org/10.6073/pasta/e96e1b8ce6d356154fb3a85eab96a106. Accessed 2025-08-14."
   }
@@ -59,6 +62,18 @@ if (download_data) {
 sdlcomp <- read.csv("sdl_veg/data/saddptqd.hh.data.csv", na.strings = na_vals)
 sdlgf <- read.csv("sdl_veg/data/pspecies_clean.js.data.csv", na.strings = na_vals)
 
+# one gf error identified Jan 2026 not yet fixed on the portal
+sdlcomp <- mutate(
+  sdlcomp,
+  USDA_name = case_when(
+    (USDA_name == "Litter" & plot == 1 & year == 2024) ~ "Lichen",
+    TRUE ~ USDA_name
+  ),
+  USDA_code = case_when(
+    (USDA_code == "2LTR" & plot == 1 & year == 2024) ~ "2LICHN",
+    TRUE ~ USDA_code
+  )
+)
 
 # subset to usda only not duplicated
 gf_join <- sdlgf %>%
@@ -110,7 +125,7 @@ sdl_top <-
 number_hits <- sdl_top %>%
   # add subshrubs to shrubs
   group_by(year, plot, growth_habit) %>%
-  summarise(hits = dplyr::n())
+  summarise(hits = dplyr::n(), .groups = "drop")
 
 # Fill in zeros for species/non-species not hit in a certain plot/year
 data_with_zeros <- expand_grid(year = unique(number_hits$year), plot = unique(number_hits$plot), growth_habit = unique(number_hits$growth_habit))
@@ -161,7 +176,7 @@ g1 <- ggplot(anom_growth_form, aes(x = year, y = anom_cov)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("green4", "chocolate4")) +
   labs(y = "Percent cover \n difference from long-term mean", x = "") +
-  scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(more %<->% less))) +
+  # scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(more %<->% less))) +
   theme_hc() +
   facet_wrap(~growth_habit, scales = "free_y") +
   theme(legend.position = "none")
@@ -171,3 +186,38 @@ ggsave(g1,
   scale = 0.8, width = 10, height = 6, dpi = 600
 )
 
+# version that shows absolute cover by growth form
+g2 <- anom_growth_form |>
+  ggplot(aes(x = year, y = mean_cover, fill = growth_habit)) +
+  geom_col(width = 0.75, alpha = 0.95, color = NA) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", size = 0.4) +
+  scale_fill_manual(
+    values = c(
+      forb = "#D55EAA",
+      graminoid = "#CFCF6B",
+      shrub = "#006400",
+      moss = "#8DAA3F",
+      lichen = "#66C2A5"
+    ),
+    guide = "none"
+  ) +
+  labs(y = "Percent cover", x = "") +
+  theme_hc() +
+  facet_wrap(~growth_habit, scales = "free_y") +
+  theme(
+    legend.position = "none",
+    strip.background = element_rect(fill = "grey95", color = NA),
+    strip.text = element_text(face = "bold", size = rel(0.95)),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = rel(0.85)),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(color = "grey92"),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(t = 6, r = 8, b = 6, l = 6)
+  )
+
+ggsave(g2,
+  file = file.path("sdl_veg", "figures", "sdl_veg_abs.jpg"),
+  scale = 0.8, width = 10, height = 6, dpi = 600
+)
+
+g2
