@@ -5,6 +5,7 @@ library(tidyverse)
 library(ggplot2)
 library(padr)
 library(scales)
+library (ggthemes)
 
 # understand metadata -----------------------------------------------------
 # https://gml.noaa.gov/aftp/data/trace_gases/co2/flask/surface/txt/co2_mlo_surface-flask_1_ccgg_event.txt
