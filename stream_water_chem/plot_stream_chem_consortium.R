@@ -180,6 +180,10 @@ anom_chem_month <- chem_by_month %>%
   ) %>%
   ungroup()
 
+# x-axis: force whole-number year breaks spaced ~5 apart (avoids
+# ggplot trying to cram a label for every single year), and angle the
+# text so labels don't collide with each other under the facets
+
 g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("#99000d", "#034e7b")) +
@@ -192,10 +196,9 @@ g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
   facet_wrap(~local_site) +
   theme(legend.position = "none")
 
-
 ggsave(g1,
   file = "figures/sulfate_anom_sept.png",
-  scale = 0.5, width = 8, height = 6
+  scale = 0.5, width = 15, height = 6
 )
 
 
@@ -252,5 +255,5 @@ g2 <- ggplot(anom_chem_summer_N, aes(x = year, y = anom_N)) +
 
 ggsave(g2,
   file = "figures/nitrate_anom_summer.png",
-  scale = 0.5, width = 8, height = 6
+  scale = 0.5, width = 15, height = 6
 )
