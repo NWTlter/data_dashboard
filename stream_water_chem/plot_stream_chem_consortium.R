@@ -186,7 +186,7 @@ anom_chem_month <- chem_by_month %>%
 
 g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  scale_fill_manual(values = c("#D55E00", "#0072B2")) +
   labs(y = "September sulfate anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(
     trans = I,
@@ -242,7 +242,7 @@ anom_chem_summer_N <- chem_by_summer %>%
 
 g2 <- ggplot(anom_chem_summer_N, aes(x = year, y = anom_N)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#99000d", "#034e7b")) +
+  scale_fill_manual(values = c("#D55E00", "#0072B2")) +
   labs(y = "Summer Nitrate anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(
     trans = I,
