@@ -14,7 +14,7 @@ theme_set(theme_bw())
 
 ####New from Anne Marie to download data from EDI####
 # only need to download once
-download_data <- TRUE
+download_data <- FALSE
 
 data_dir <- "data"
 figures_dir <- "figures"
@@ -194,7 +194,7 @@ g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
 
 
 ggsave(g1,
-  file = "plots/sulfate_anom_sept.png",
+  file = "figures/sulfate_anom_sept.png",
   scale = 0.5, width = 8, height = 6
 )
 
@@ -251,6 +251,6 @@ g2 <- ggplot(anom_chem_summer_N, aes(x = year, y = anom_N)) +
 
 
 ggsave(g2,
-  file = "plots/nitrate_anom_summer.png",
+  file = "figures/nitrate_anom_summer.png",
   scale = 0.5, width = 8, height = 6
 )
