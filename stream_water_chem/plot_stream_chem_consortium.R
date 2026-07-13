@@ -11,11 +11,79 @@ library(tidyverse)
 options(stringsAsFactors = F)
 theme_set(theme_bw())
 
+####New from Anne Marie to download data from EDI####
+# only need to download once
+download_data <- FALSE
+
+data_dir <- "data"
+figures_dir <- "figures"
+
+# Create figures directory if it doesn't exist
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
+
+# download data -----------------------------------------------------------
+# Note: if you have already downloaded SOME data, the read_data_package_archive
+# function will not work as it does not want to overwrite. Clear your /data
+# directories and then return to run the following code.
+if (download_data) {
+  # download the data from EDI
+  # discharge inputs used are:
+  # knb-lter-nwt.102 (albion)
+  # knb-lter-nwt.105 (gl4)
+  # knb-lter-nwt.111 (martinelli)
+  # knb-lter-nwt.74 (saddle)
+  
+  # no discharge but if you just want trends
+  # there are some others in just select yrs, etc.
+  # 163 is gr5rock glacier; 162 is watershed flume; 213 is soddie, et
+  # 109 is gl5#rg
+  
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
+  
+  scope <- "knb-lter-nwt" # Niwot scope
+  
+  # Note: the overwrite argument does not work, so clear out any existing
+  # copies before running this
+  for (id in c(
+    "102", "105", "111",
+    "74"
+  )) {
+    # Ask EDI to tell me what the most current version is
+    revision <- list_data_package_revisions(scope, id, filter = "newest")
+    
+    # Display current version - > this is referred to as the "packageID"
+    packageID <- paste(scope, id, revision, sep = ".")
+    
+    # Download the data
+    read_data_package_archive(packageID, path = data_dir)
+    print(read_data_package_citation(packageID))
+  }
+
+
+# update the below so you remember to cite it correctly
+# Citations need to be added here for each package#
+for (fname in list.files(data_dir,
+                         pattern = "knb-lter.*zip",
+                         full.names = TRUE
+)) {
+  unzip(zipfile = fname, exdir = data_dir)
+}
+}
+
+#Sarah- would you please help me from here to make sure the missing values are handled correctly? 
+# Your code to download the data and replace missing values is below
+
+#####  Prior Code from Sarah to download data from EDI ####
+
 # all missing values that have to are MCAR
 na_vals <- c("", "NA", "NaN", "NP", "DNS", "NSS", "EQCL", "QNS", "NV", "dns")
 
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-source("../utility_functions/utility_functions_all.R")
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#source("../utility_functions/utility_functions_all.R")
 
 # discharge inputs used are:
 # knb-lter-nwt.102.16 (albion)
@@ -29,15 +97,15 @@ source("../utility_functions/utility_functions_all.R")
 # 109 is gl5#rg
 
 # grab all the water chem files off EDI
-data_file <- list()
-data_file[["albisolu"]] <- getTabular(103, na = na_vals)
-data_file[["gre4solu"]] <- getTabular(108, na = na_vals)
-data_file[["saddsolu"]] <- getTabular(160, na = na_vals)
-data_file[["martsolu"]] <- getTabular(112, na = na_vals)
-data_file[["grrgsolu"]] <- getTabular(163, na = na_vals)
-data_file[["gre5solu"]] <- getTabular(109, na = na_vals)
+#data_file <- list()
+#data_file[["albisolu"]] <- getTabular(103, na = na_vals)
+#data_file[["gre4solu"]] <- getTabular(108, na = na_vals)
+#data_file[["saddsolu"]] <- getTabular(160, na = na_vals)
+#data_file[["martsolu"]] <- getTabular(112, na = na_vals)
+#data_file[["grrgsolu"]] <- getTabular(163, na = na_vals)
+#data_file[["gre5solu"]] <- getTabular(109, na = na_vals)
 
-datafile <- plyr::rbind.fill(data_file) %>% data.frame(.)
+#datafile <- plyr::rbind.fill(data_file) %>% data.frame(.)
 
 num_vars <- names(datafile)[6:44]
 
