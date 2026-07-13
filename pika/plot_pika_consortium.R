@@ -174,7 +174,7 @@ g1 <- ggplot(by.yr.anom) +
     ymin = pmin(mean_log_ratio, log_ratio), ymax = pmax(mean_log_ratio, log_ratio),
     fill = posneg_log
   )) +
-  scale_fill_manual(values = c("#034e7b", "#99000d")) +
+  scale_fill_manual(values = c("#0072B2", "#D55E00")) +
   geom_hline(
     yintercept = unique(by.yr.anom$mean_log_ratio),
     linetype = "dotted", color = "grey50", linewidth = 1
