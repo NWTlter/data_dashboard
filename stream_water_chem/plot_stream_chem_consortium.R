@@ -74,8 +74,25 @@ for (fname in list.files(data_dir,
 }
 }
 
-#Sarah- would you please help me from here to make sure the missing values are handled correctly? 
-# Your code to download the data and replace missing values is below
+# read in data --------------------------------------------------
+#Sarah- would you please help me from here to make sure the missing values handled correctly and the separate datasets are merged correctly?  
+# Your code to download the data and replace missing values starts on line 99
+
+dfSadd <- read.csv(file.path(data_dir, "saddisch.nc.data.csv"),
+               na.strings = "NaN"
+)
+
+dfMar <- read.csv(file.path(data_dir, "mardisch.nc.data.csv"),
+                na.strings = "NaN"
+)
+
+dfgl4 <- read.csv(file.path(data_dir, "gl4disch.nc.data.csv"),
+                na.strings = "NaN"
+)
+
+dfalb <- read.csv(file.path(data_dir, "albdisch.nc.data.csv"),
+                na.strings = "NaN"
+)
 
 #####  Prior Code from Sarah to download data from EDI ####
 
