@@ -1,5 +1,6 @@
 # Code to plot concentrations
-# SCE 10 Jan 2023
+# Code developed by Sarah Elmendorf (2023)
+# Code updated by Anne Marie Panetta (2026)
 # see nwt-8 long-term trends for flow-normalized workflow if desired
 
 # setup#########
@@ -65,7 +66,9 @@ if (download_data) {
 
 
 # update the below so you remember to cite it correctly
-# Citations need to be added here for each package#
+# Albion: Caine, N., J. Morse, and Niwot Ridge LTER. 2025. Streamflow data for Albion camp, 1981 - ongoing. ver 20. Environmental Data Initiative. https://doi.org/10.6073/pasta/00341116ab5c8eac60e641cb1b5c3468
+# GreenLake4:
+  
 for (fname in list.files(data_dir,
                          pattern = "knb-lter.*zip",
                          full.names = TRUE
