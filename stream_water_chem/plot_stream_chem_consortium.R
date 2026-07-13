@@ -6,6 +6,8 @@
 # setup#########
 # clean up enviro, read in needed libraries
 rm(list = ls())
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
 # library(readxl)
 library(tidyverse)
 # library(vegan)
@@ -14,7 +16,7 @@ theme_set(theme_bw())
 
 ####New from Anne Marie to download data from EDI####
 # only need to download once
-download_data <- FALSE
+download_data <- TRUE
 
 data_dir <- "data"
 figures_dir <- "figures"
@@ -186,7 +188,7 @@ anom_chem_month <- chem_by_month %>%
 
 g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#D55E00", "#0072B2")) +
+  scale_fill_manual(values = c("#8C2F12", "#F5DDB0")) +
   labs(y = "September sulfate anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(
     trans = I,
@@ -242,7 +244,7 @@ anom_chem_summer_N <- chem_by_summer %>%
 
 g2 <- ggplot(anom_chem_summer_N, aes(x = year, y = anom_N)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#D55E00", "#0072B2")) +
+  scale_fill_manual(values = c("#1B7A6F", "#8ED1C4")) +
   labs(y = "Summer Nitrate anomaly (%)", x = "") +
   scale_y_symmetric(sec.axis = sec_axis(
     trans = I,
