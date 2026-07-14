@@ -3,6 +3,7 @@
 # that has more details but different aesthetics in figs
 # script-pika-juvie-capture-ratio-vs-GDD.R
 # updated by SCE 6 July 2026 to use log ratios
+# updated by Anne Marie Panetta July 2026 for data dashboard
 ##########################
 
 # -- SETUP ------
@@ -32,11 +33,22 @@ if (download_data) {
   }
 
   scope <- "knb-lter-nwt" # Niwot scope
-
-  # 43 is small mammal species composition data for Niwot Ridge, 1981-1990
+###Data packages:
+  ## 43 is small mammal species composition data for Niwot Ridge, 1981-1990
   #    (includes the pika-cleared-of-recapture table)
-  # 8 is pika demography data for west knoll and Indian Peaks wilderness,
+  # Citation (update as needed): 
+  # Halfpenny, J., C. Ray, and Niwot Ridge LTER. 2025. 
+  # Small mammal species composition data for Niwot Ridge, 1981 - 1990. ver 6. 
+  # Environmental Data Initiative. 
+  # https://doi.org/10.6073/pasta/129b75c156d4e825e691b6d5ed401300.
+  
+  ## 8 is pika demography data for west knoll and Indian Peaks wilderness,
   #   2008-ongoing
+  # Citation (update as needed):
+  # Ray, C. and Niwot Ridge LTER. 2025. 
+  # Pika demography data for west knoll and Indian Peaks wilderness, 
+  # 2008 - ongoing. ver 9.Environmental Data Initiative. 
+  # https://doi.org/10.6073/pasta/702d00888da15e13ce9a6daf36dcc06d.
 
   # Note: the overwrite argument does not work, so clear out any existing
   # copies before running this
@@ -147,7 +159,7 @@ by.yr.anom <- by.yr %>%
 
 # everything plotted on a log-ratio scale: bars originate at the mean
 # log-ratio (dotted grey line) rather than at 0, so years above the mean are
-# blue and rise, years below are red and fall; axis ticks/labels are
+# purple and rise, years below are gold and fall; axis ticks/labels are
 # back-transformed from log-ratio to ratio units
 bar_half_width <- 0.4
 
@@ -196,7 +208,7 @@ g1 <- ggplot(by.yr.anom) +
   annotate(
     "text",
     x = x_label_pos, y = 0,
-    label = "higher reproduction ↔ lower reproduction",
+    label = "higher recruitment ↔ lower recruitment",
     angle = -90, hjust = 0.5, vjust = 0.5, size = axis_title_size
   ) +
   coord_cartesian(
