@@ -1,4 +1,6 @@
 # Script to download and plot Saddle (nwt package id 405) soil moisture
+# Code developed by Sarah Elmendorf. 
+# Updated for Data Dashbaord by Anne Marie Panetta 2026.
 # temporal patterns
 
 library(tidyverse)
