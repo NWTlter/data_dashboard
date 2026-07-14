@@ -68,11 +68,35 @@ if (download_data) {
 
 
 # update the below so you remember to cite it correctly
-# Albion: 
-# GL4
-# Mart:
-# GL5:
-# GrrG:
+## Albion: 103, 1982-ongoing
+  #Caine, T., J. Morse, S. Yevak, H. Brandes, and Niwot Ridge LTER. 2025. 
+  #Stream water chemistry data for Albion site, 1982 - ongoing. ver 15. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/39b37d16657733f1d661de4c727568a3 
+  
+# Green Lake 4: 108, 1982-ongoing
+  #Caine, T., J. Morse, S. Yevak, H. Brandes, and Niwot Ridge LTER. 2025. 
+  #Stream water chemistry data for Green Lake 4, 1982 - ongoing. ver 14. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/cdbd25e2ce7a8b17f785bd4f07aba4fe
+  
+# Martinelli basin: 112, 1982-ongoing
+  #Caine, T., J. Morse, S. Yevak, H. Brandes, and Niwot Ridge LTER. 2025. 
+  #Stream water chemistry data for Martinelli basin, 1984 - ongoing. ver 5. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/4a761ed1f7b24d25c3eb870662213789 
+  
+# Green Lake 5 Rock Glacier: 163, 1998-ongoing
+  #Caine, T., J. Morse, S. Yevak, H. Brandes, and Niwot Ridge LTER. 2025. 
+  #Stream water chemistry data for Green Lake 5 Rock Glacier, 1998 - ongoing. ver 4. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/990a451879638d17eda4526215114390
+  
+# Green Lake 5 Outlet: 109, 1984- ongoing (?2021)
+  #Caine, T. 2021. 
+  #Stream water chemistry data for Green Lake 5 outlet, 1984 - ongoing. ver 12. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/effe6d9f1a764ebaccb7ae9b28cba7a5 
+
+# Saddle Stream site: 160, 1994-ongoing 
+  #Caine, T., J. Morse, S. Yevak, H. Brandes, and Niwot Ridge LTER. 2025. 
+  #Stream water chemistry data for Saddle Stream site, 1994 - ongoing. ver 4. 
+  #Environmental Data Initiative. https://doi.org/10.6073/pasta/92e6f11e89b730321df0865bec4b7b0b 
   
 for (fname in list.files(data_dir,
                          pattern = "knb-lter.*zip",
