@@ -1,7 +1,8 @@
 # Script to download and plot c1/d1 air temp and ppt trends by quarter
 # and/or by winter/summer
 # and/or annual
-# Updated 21 Nov 2025
+# Developed by Meagan Oldfather and Sarah Elmendorf
+# Updated by Anne Marie Panetta 2025
 
 # -- SETUP ------
 # Clean environment
