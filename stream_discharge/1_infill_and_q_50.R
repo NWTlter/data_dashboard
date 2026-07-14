@@ -1,5 +1,6 @@
-# code to infill and play around with discharge phenology from NWT
-# sce 20 Jan 2021.
+# Code to infill and explore discharge phenology from NWT
+# Developed by Sarah C. Elmendorf, 20 Jan 2021.
+# Updated for Data Dashbaord by Anne Marie Panetta, 2026.
 
 # todo####
 # consider keeping the records w/
@@ -8,8 +9,9 @@
 # consider weighing analyses based on amt
 # of infilled data or removing largely infilled years
 
-# updated code to read from latest version on EDI.
-
+# 2026-updated code to read from latest version on EDI and export spctl_7.csv,
+# which is used to plot data dashboard figures using code in 2_plot_discharge_consortium.R
+# Lines to run for this run through 733. 
 
 # setup###################################################################
 # libraries
@@ -23,28 +25,108 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 # here I use 7, but tried 3,5,9 just for a viz check
 sp_control <- 7
 
-# will makes plots dump out to a file if false, which is kind of helful
+# will makes plots dump out to a file if false, which is kind of helpful
 plot_in_code <- FALSE
 
+####Download data from EDI####
+# only need to download once
+download_data <- FALSE
 
-# read data###########################################################
-# read in all data - latest versions from nwt server
-# at some point update this to read off EDI
-all_files <- c(
-  "albdisch.nc.data.csv",
-  "gl4disch.nc.data.csv",
-  "mardisch.nc.data.csv",
-  "saddisch.nc.data.csv"
-)
+data_dir <- "data"
+figures_dir <- "figures"
 
-df <- list()
-for (file in all_files) {
-  df[[file]] <- readr::read_csv(paste0("http://niwot.colorado.edu/data_csvs/", file),
-    na = "NaN", guess_max = 1000000
-  )
+# Create figures directory if it doesn't exist
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
 }
 
-df <- df %>%
+# download data -----------------------------------------------------------
+# Note: if you have already downloaded SOME data, the read_data_package_archive
+# function will not work as it does not want to overwrite. Clear your /data
+# directories and then return to run the following code.
+if (download_data) {
+  # download the data from EDI
+  # discharge inputs used are:
+  # knb-lter-nwt.102 (albion)
+    #Citation: Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
+    #Streamflow data for Albion camp, 1981 - ongoing. ver 20. 
+    #Environmental Data Initiative. 
+    #https://doi.org/10.6073/pasta/00341116ab5c8eac60e641cb1b5c3468
+  # knb-lter-nwt.105 (gl4)
+    #Citation: Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
+    #Streamflow for Green Lake 4, 1981 - ongoing. ver 20. 
+    #Environmental Data Initiative. 
+    #https://doi.org/10.6073/pasta/c3fa75cfe47c10fb61d866fe4d75a93a.
+  # knb-lter-nwt.111 (martinelli)
+    #Citation: Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
+    #Streamflow for Martinelli basin, 1982 - ongoing. ver 17. 
+    #Environmental Data Initiative. 
+    #https://doi.org/10.6073/pasta/44b350d46f371082b2cc98490cf36959
+  # knb-lter-nwt.74 (saddle)
+    #Citation: Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
+    #Streamflow data for Saddle stream, 1999 - ongoing. ver 10. 
+    #Environmental Data Initiative. 
+    #https://doi.org/10.6073/pasta/c699680482443efff3ad9f30c2c962a1
+  
+  # no discharge but if you just want trends
+  # there are some others in just select yrs, etc.
+  # 163 is gr5rock glacier; 162 is watershed flume; 213 is soddie, et
+  # 109 is gl5#rg
+
+  
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
+  
+  scope <- "knb-lter-nwt" # Niwot scope
+  
+  # Note: the overwrite argument does not work, so clear out any existing
+  # copies before running this
+  for (id in c(
+    "102", "105", "111",
+    "74"
+  )) {
+    # Ask EDI to tell me what the most current version is
+    revision <- list_data_package_revisions(scope, id, filter = "newest")
+    
+    # Display current version - > this is referred to as the "packageID"
+    packageID <- paste(scope, id, revision, sep = ".")
+    
+    # Download the data
+    read_data_package_archive(packageID, path = data_dir)
+    print(read_data_package_citation(packageID))
+  }
+  
+  
+  # update the below so you remember to cite it correctly
+  # knb-lter-nwt.102 (albion)
+  # knb-lter-nwt.105 (gl4)
+  # knb-lter-nwt.111 (martinelli)
+  # knb-lter-nwt.74 (saddle)
+  
+  for (fname in list.files(data_dir,
+                           pattern = "knb-lter.*zip",
+                           full.names = TRUE
+  )) {
+    unzip(zipfile = fname, exdir = data_dir)
+  }
+}
+# read data###########################################################
+# read in all data - the latest versions from EDI (code for downloading above)
+
+na_vals <- c("NaN")
+data_file <- list()
+
+data_file[["albdisch.nc.data.csv"]] <- readr::read_csv(file.path(data_dir, "albdisch.nc.data.csv"),
+                                    na = na_vals, guess_max = 1000000)
+data_file[["gl4disch.nc.data.csv"]] <- readr::read_csv(file.path(data_dir, "gl4disch.nc.data.csv"),
+                                     na = na_vals, guess_max = 1000000)
+data_file[["saddisch.nc.data.csv"]] <- readr::read_csv(file.path(data_dir, "saddisch.nc.data.csv"),
+                                    na = na_vals, guess_max = 1000000)
+data_file[["mardisch.nc.data.csv"]] <- readr::read_csv(file.path(data_dir, "mardisch.nc.data.csv"),
+                                   na = na_vals, guess_max = 1000000)
+
+df <- data_file %>%
   data.table::rbindlist(., use.names = TRUE, idcol = "file", fill = TRUE)
 
 ### infill martinelli and saddle###############################################
@@ -99,7 +181,6 @@ mutate(discharge = ifelse(is.na(discharge) & local_site == "mar" &
   date >= "2020-09-24" & date < "2021-01-01",
 0, discharge
 ))
-
 
 
 # Mart and saddle are seasonal, so first step is to infill
@@ -639,19 +720,26 @@ infilled_df <- infilled_df %>%
 # handful of very slightly negative values from
 # the back transform
 
+#Generating a new data frame of infilled data for plotting (script to use= 2_plot_discharge_consortium.R)
 infilled_df <- infilled_df %>%
   mutate(discharge = ifelse((!is.na(discharge) & discharge < 0), 0, discharge))
 
 
 write.csv(infilled_df %>%
-  select(local_site, date, discharge, yday, year, wyear, is_infilled),
-paste0("infilled_data/spctl_", sp_control, ".csv"),
-row.names = FALSE
+            select(local_site, date, discharge, yday, year, wyear, is_infilled),
+          file.path(data_dir, paste0("spctl_", sp_control, ".csv")),
+          row.names = FALSE
 )
 
+#Older code from SCE for writing infilled_df:
+#write.csv(infilled_df %>%
+#  select(local_site, date, discharge, yday, year, wyear, is_infilled),
+#paste0("infilled_data/spctl_", sp_control, ".csv"),
+#row.names = FALSE
+#)
 #infilled_df = read.csv("discharge/infilled_data/spctl_7.csv")
 
-#calc cum curves
+## Calculating cum curves
 
 
 (ggplot(
