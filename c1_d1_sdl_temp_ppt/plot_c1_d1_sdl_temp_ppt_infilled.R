@@ -1,8 +1,8 @@
 # Script to download and plot c1/d1 air temp and ppt trends by quarter
 # and/or by winter/summer
 # and/or annual
-# Developed by Meagan Oldfather and Sarah Elmendorf
-# Updated by Anne Marie Panetta 2025
+# Initial code developed by Meagan Oldfather and Sarah Elmendorf
+# Code updated for Data Dashboard by Anne Marie Panetta 2025
 
 # -- SETUP ------
 # Clean environment
