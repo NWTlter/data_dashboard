@@ -3,7 +3,7 @@
 # ============================================================================
 #
 # Purpose:
-#   Reads gap-filled daily discharge data (produced by 1_infill_and_q_50.R)
+#   Reads gap-filled daily discharge data (produced by 1_streamflow_infill_and_q_50_data_dashboard.R)
 #   for four Niwot Ridge fiel sites-- Albion (alb), Green Lake 4 (gl4),
 #   Martinelli (mar), and Saddle (sdl) -- and produces three summary figures:
 #
@@ -49,7 +49,7 @@ if (!dir.exists(figures_dir)) {
 }
 
 # The "spline control" (sp_control) parameter used during gap-filling;
-# see 1_infill_and_q_50.R for details. It has little effect on the final
+# see 1_streamflow_infill_and_q_50_data_dashboard.R for details. It has little effect on the final
 # infilled values, but is included in the filename to keep multiple
 # infilling runs distinguishable.
 sp_control <- 7
