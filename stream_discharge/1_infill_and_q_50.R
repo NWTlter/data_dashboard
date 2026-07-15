@@ -1,77 +1,106 @@
-# Code to infill and explore discharge phenology from NWT
-# Developed by Sarah C. Elmendorf, 20 Jan 2021.
-# Updated for Data Dashbaord by Anne Marie Panetta, 2026.
+# ============================================================================
+# Niwot Ridge LTER Data Dashboard: Streamflow Gap-Filling and Export
+# ============================================================================
+#
+# Purpose:
+#   Downloads (optionally) and gap-fills daily discharge data for four
+#   Niwot Ridge stream gauges -- Albion (alb), Green Lake 4 (gl4),
+#   Martinelli (mar), and Saddle (sdl) -- and exports a combined,
+#   gap-filled dataset for use in downstream plotting scripts.
+#
+#   Gaps are filled using a combination of:
+#     - Known dry-channel periods (from site notes), set to zero flow
+#     - Multivariate EM imputation (mnimput), using each site's other
+#       years and/or correlated nearby sites as predictors
+#     - Short (<=3 day) linear interpolation for any remaining small gaps
+#
+# Input:
+#   EDI data packages (downloaded if download_data = TRUE; otherwise
+#   expects the raw CSVs to already exist in data_dir -- see the
+#   read-in section below for expected filenames)
+#
+# Output:
+#   data/spctl_<sp_control>.csv -- combined, gap-filled daily discharge
+#   data for all four sites, with columns: local_site, date, discharge,
+#   yday, year, wyear, is_infilled
+#
+#   This file is the required input for streamflow_data_dashboard.R.
+#
+# Original analysis: Sarah C. Elmendorf, 20 Jan 2021
+# Data Dashboard update: Anne Marie Panetta, 2026
+#   (2026 update: reads directly from the latest EDI package version;
+#   see citations below)
+# ============================================================================
 
-# todo####
-# consider keeping the records w/
-# ""estimate based on partial records only"
+# todo (as of 2026 update):
+#   - Consider retaining records currently excluded because they are
+#     flagged "estimate based on partial records only"
+#   - Consider weighting downstream analyses by amount of infilled data,
+#     or excluding years that are mostly infilled
 
-# consider weighing analyses based on amt
-# of infilled data or removing largely infilled years
 
-# 2026-updated code to read from latest version on EDI and export spctl_7.csv,
-# which is used to plot data dashboard figures using code in 2_plot_discharge_consortium.R
-# Lines to run for this run through 733. 
+# -- SETUP ------------------------------------------------------------
 
-# setup###################################################################
-# libraries
 library(ggplot2)
 library(tidyverse)
 library(mtsdi) # for imputing
 
+# Anchor working directory to this script's location (RStudio only)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-# try a few different sp_controls, they don't in the end matter that much
-# here I use 7, but tried 3,5,9 just for a viz check
+# Spline degrees-of-freedom control used by mnimput. Values of 3, 5, 7,
+# and 9 were compared visually during development; 7 was chosen, but the
+# final infilled values are not very sensitive to this choice.
 sp_control <- 7
 
-# will makes plots dump out to a file if false, which is kind of helpful
+# If TRUE, generates in-session diagnostic plots at each infilling step
+# so you can visually check how well the imputation performed. These are
+# not saved to disk; set to TRUE when reviewing/debugging the pipeline.
 plot_in_code <- FALSE
 
-####Download data from EDI####
-# only need to download once
+# Set to TRUE to (re)download source data from EDI. Only needs to be run
+# once, or when a newer package version is released.
 download_data <- FALSE
 
 data_dir <- "data"
 figures_dir <- "figures"
 
-# Create figures directory if it doesn't exist
 if (!dir.exists(figures_dir)) {
   dir.create(figures_dir, recursive = TRUE)
 }
 
-# download data -----------------------------------------------------------
-# Note: if you have already downloaded SOME data, the read_data_package_archive
-# function will not work as it does not want to overwrite. Clear your /data
-# directories and then return to run the following code.
+# -- DOWNLOAD DATA FROM EDI ---------------------------------------------
+# Note: if you have already downloaded SOME data, read_data_package_archive()
+# will not overwrite existing files. Clear the /data directory first if you
+# need to force a fresh download.
+
 if (download_data) {
-  # download the data from EDI
-  # discharge inputs used are:
+  # Discharge data packages used, with current citations:
+
   # knb-lter-nwt.102 (albion)
-    #Citation: Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
+    #Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
     #Streamflow data for Albion camp, 1981 - ongoing. ver 20. 
     #Environmental Data Initiative. 
     #https://doi.org/10.6073/pasta/00341116ab5c8eac60e641cb1b5c3468
   # knb-lter-nwt.105 (gl4)
-    #Citation: Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
+    #Caine, N., J. Morse, and Niwot Ridge LTER. 2025. 
     #Streamflow for Green Lake 4, 1981 - ongoing. ver 20. 
     #Environmental Data Initiative. 
     #https://doi.org/10.6073/pasta/c3fa75cfe47c10fb61d866fe4d75a93a.
   # knb-lter-nwt.111 (martinelli)
-    #Citation: Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
+    #Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
     #Streamflow for Martinelli basin, 1982 - ongoing. ver 17. 
     #Environmental Data Initiative. 
     #https://doi.org/10.6073/pasta/44b350d46f371082b2cc98490cf36959
   # knb-lter-nwt.74 (saddle)
-    #Citation: Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
+    #Caine, T., J. Morse, and Niwot Ridge LTER. 2026. 
     #Streamflow data for Saddle stream, 1999 - ongoing. ver 10. 
     #Environmental Data Initiative. 
     #https://doi.org/10.6073/pasta/c699680482443efff3ad9f30c2c962a1
   
-  # no discharge but if you just want trends
-  # there are some others in just select yrs, etc.
-  # 163 is gr5rock glacier; 162 is watershed flume; 213 is soddie, et
-  # 109 is gl5#rg
+  # Related packages not used in this pipeline, but available on EDI if
+  # a future revision wants additional sites: 163 (Green Lake 5 rock
+  # glacier), 162 (watershed flume), 213 (Soddie), 109 (Green Lake 5)
 
   
   if (!dir.exists(data_dir)) {
@@ -81,7 +110,7 @@ if (download_data) {
   scope <- "knb-lter-nwt" # Niwot scope
   
   # Note: the overwrite argument does not work, so clear out any existing
-  # copies before running this
+  # copies before running this loop.
   for (id in c(
     "102", "105", "111",
     "74"
@@ -111,8 +140,7 @@ if (download_data) {
     unzip(zipfile = fname, exdir = data_dir)
   }
 }
-# read data###########################################################
-# read in all data - the latest versions from EDI (code for downloading above)
+# -- READ AND COMBINE SITE DATA ------------------------------------------
 
 na_vals <- c("NaN")
 data_file <- list()
@@ -129,12 +157,16 @@ data_file[["mardisch.nc.data.csv"]] <- readr::read_csv(file.path(data_dir, "mard
 df <- data_file %>%
   data.table::rbindlist(., use.names = TRUE, idcol = "file", fill = TRUE)
 
-### infill martinelli and saddle###############################################
+# -- INFILL MARTINELLI AND SADDLE (SEASONAL, INTERMITTENT SITES) --------
+# Martinelli and Saddle both run dry for part of the year, so the
+# infilling strategy differs from the perennial sites (GL4, Albion):
+# known dry periods are set to zero flow directly from site notes, then
+# any remaining gaps within the flow season are imputed.
 
-# first add in notes from mart in years where there are real notes
-# on when it went dry
-# check against mart
-# sce some of these are in there but some gaps could fill
+# Documented dry-channel periods for Martinelli, based on site notes.
+# Some of these are already reflected in the source data's own flags,
+# but a few gaps could still be filled in directly from the notes here.
+
 df <- df %>%
   # 1998 Record ends 09/24/98 when channel dry and logger removed.
   mutate(discharge = ifelse(is.na(discharge) & local_site == "mar" &
@@ -183,9 +215,9 @@ mutate(discharge = ifelse(is.na(discharge) & local_site == "mar" &
 ))
 
 
-# Mart and saddle are seasonal, so first step is to infill
-# the doys where there is NEVER flow w 0s
-# calculate flow season
+# Determine each site's typical flow season (first/last day-of-year with
+# any recorded nonzero flow), so days outside that window can be
+# confidently set to zero rather than imputed.
 flow_season <- df %>%
   mutate(yday = lubridate::yday(date)) %>%
   mutate(discharge = ifelse(!is.na(notes), NA, discharge)) %>%
@@ -193,7 +225,9 @@ flow_season <- df %>%
   group_by(local_site) %>%
   summarise(start = min(yday), end = max(yday))
 
-# fill mart and saddle consistent off season with 0
+# Fill the off-season (outside each site's flow window) with zero flow,
+# and clear out any previously-infilled/estimated values so the
+# imputation below works from raw data only.
 infilled_df <- df %>%
   mutate(
     yday = lubridate::yday(date),
@@ -211,14 +245,12 @@ infilled_df <- df %>%
   ), NA, discharge)) %>%
   mutate(discharge = ifelse(yday < start, 0, discharge)) %>%
   mutate(discharge = ifelse(yday > end, 0, discharge)) # %>%
-# left_join(., gap_by_wy)
 
-# step 2 of mar/saddle is to use mnimmput with
-# the other site as a predictor, as well as all other
-# years at the same site as a predictor
-# but truncating out the winter season
+# Step 2: use multivariate imputation (mnimput) to fill remaining
+# within-season gaps, using the other seasonal site as a predictor plus
+# all other years at the same site, restricted to the shared flow window.
 
-# saddle first
+# --- Saddle, imputed first ---
 
 df_wide <- infilled_df %>%
   filter(yday > min(flow_season$start[flow_season$local_site %in% c("sdl", "mar")]) &
@@ -229,7 +261,9 @@ df_wide <- infilled_df %>%
   mutate(yday = lubridate::yday(date), year = lubridate::year(date)) %>%
   arrange(date)
 
-# add in the sdl for all years
+# Add each year of Saddle data as its own predictor column, so the
+# imputation can draw on inter-annual similarity as well as the
+# Martinelli/Saddle relationship.
 for (yr in unique(df_wide$year)) {
   newdat <- df %>%
     filter(local_site == "sdl" & lubridate::year(date) == yr) %>%
@@ -249,7 +283,7 @@ for (yr in unique(df_wide$year)) {
   }
 }
 
-# remove the self-self predictions
+# Remove each year's self-prediction (a year cannot predict itself)
 for (yr in unique(df_wide$year)) {
   mycol <- names(df_wide)[grepl(yr, names(df_wide))]
   if (length(mycol) > 0) {
@@ -262,8 +296,8 @@ df_wide <- df_wide %>%
   mutate(sdl = ifelse(year == 2013 & yday %in% c(253:259), NA, sdl)) %>%
   arrange(date)
 
-# make predictions
-# multivariate EM imputation w ts, spline w 7df
+
+# Multivariate EM imputation, time-series mode, spline df = sp_control
 
 pred_sdl <- mnimput(df_wide %>%
   select(-date, -year, -yday) %>%
@@ -280,23 +314,6 @@ sp.control =
 )
 
 
-#
-#
-#
-# #do we really have to list out all the vars in the formula?
-# # or can we just ditch the ones we don't care about
-# pred_sdl = mnimput(df_wide%>%
-#                      select(-year)%>%
-#                      as.data.frame(.), data = df_wide%>%
-#                      #select(-yday, -year, -alb)%>%
-#                      select(-year)%>%
-#                      as.data.frame(.),#%>%
-#                    #tail(1000),
-#                    maxit =50, ts = TRUE,
-#                    log = TRUE, log.offset = 0.01)
-
-
-# t2= predict(tst)
 sdl_infl <- predict(pred_sdl)
 sdl_infl$date <- df_wide %>% # tail(1000)%>%
   dplyr::pull(date)
@@ -307,6 +324,8 @@ sdl_infl <- sdl_infl %>%
 
 # quick plot of how the infilling looks
 if (plot_in_code) {
+  # Visual check: do the imputed Saddle values (red) look reasonable
+  # relative to observed data (blue)?
   ggplot(sdl_infl %>% filter(local_site == "sdl" &
     date >= "1998-10-01"), aes(x = date, y = discharge)) +
     # geom_line(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='red')+
@@ -317,7 +336,10 @@ if (plot_in_code) {
     facet_wrap(~local_site, scales = "free_y", ncol = 1)
 }
 
-# bring the saddle predictions in
+# Bring the Saddle predictions into the main dataset. Infilling starts in
+# winter 1998, since spring 1999 is the earliest year with any observed
+# Saddle data.
+
 infilled_df <- infilled_df %>%
   # only infill starting in winter of 1998, spring 1999 is the earliest year
   # with any saddle data
@@ -325,8 +347,9 @@ infilled_df <- infilled_df %>%
     rename(sdl_disch_inf = discharge))
 
 if (plot_in_code) {
-  # looks ok-ish, though
-  # might consider xts infilling for gaps <2d?
+  # Per-water-year check of observed (blue) vs. imputed (red) values.
+  # Looks reasonable overall; short (<2 day) gaps could alternatively be
+  # handled with simple time-series interpolation rather than mnimput.
   ggplot(infilled_df %>% filter(local_site == "sdl" &
     date >= "1998-10-01"), aes(x = yday, y = discharge)) +
     geom_point(
@@ -338,8 +361,6 @@ if (plot_in_code) {
     geom_point(color = "blue") +
     facet_wrap(~wyear, scales = "free_y", ncol = 4)
 
-  # this looks ok, we could potentially
-  # add in some 1999 off season if wanted one more year
   ggplot(infilled_df %>% filter(local_site == "sdl"), aes(x = yday, y = discharge)) +
     # geom_line(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='red')+
     # geom_point(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='blue')+
@@ -354,9 +375,9 @@ if (plot_in_code) {
 
 
 
-# repeat infilling mart off sdl
-# use mnimput to predict the missing mar discharge
-# does this look ok
+# --- Martinelli, imputed using the same approach, now with the
+#     newly-infilled Saddle data available as a predictor ---
+
 df_wide <- infilled_df %>%
   filter(yday > min(flow_season$start[flow_season$local_site %in% c("sdl", "mar")]) &
     yday < max(flow_season$end[flow_season$local_site %in% c("sdl", "mar")])) %>%
@@ -439,7 +460,9 @@ infilled_df <- infilled_df %>%
   left_join(mar_infl %>% filter(local_site == "mar" & date < "2019-10-07") %>%
     rename(mar_disch_inf = discharge))
 if (plot_in_code) {
-  # looks ok except 1987 when started too late?
+  # Looks reasonable overall, except 1987, where the observed record
+  # appears to start too late in the season for the imputation to fill
+  # in confidently -- worth a closer look in a future revision.
   ggplot(infilled_df %>% filter(local_site == "mar" & date < "2019-10-07"), aes(x = yday, y = discharge)) +
     # geom_line(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='red')+
     # geom_point(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='blue')+
@@ -466,9 +489,11 @@ if (plot_in_code) {
 
 
 
-### gl4 infilling###############################################
-# infill gl4 off self in other wyrs (correlation with other sites basically
-# goes to 0 in winter months, which is what we are missing)
+# -- INFILL GREEN LAKE 4 --------------------------------
+# GL4 flows year-round, so it is infilled against its own record from
+# other water years, rather than against another site -- correlation
+# with other sites drops to near zero in winter months, which is
+# exactly when GL4 has the most missing data.
 
 df_wide <- infilled_df %>%
   filter(local_site %in% c("gl4")) %>%
@@ -517,9 +542,11 @@ for (yr in unique(df_wide$wyear)) {
   }
 }
 
-# do not use correlations with wyear 2015 in the predictions
-# as these data are bad, similarly
-# we expect the correlations with the flood data across years not to be relevant
+# Exclude wyear 2015 (bad sensor data) and the 2013 flood period from
+# use as predictors, since neither is representative of typical flow.
+# TODO: apply the same 2013-flood exclusion to Martinelli/Saddle above,
+# for consistency.
+
 df_wide <- df_wide %>%
   arrange(date) %>%
   mutate(gl4 = ifelse(wyear == 2015, NA, gl4)) %>%
@@ -562,7 +589,8 @@ if (plot_in_code) {
 infilled_df <- infilled_df %>%
   left_join(gl4_infl %>% filter(local_site == "gl4" & date < "2020-10-01") %>%
     rename(gl4_disch_inf = discharge)) %>%
-  # remove wy 2015 seems broken sensor of some sort and 2018 hardly any data
+  # Exclude wyear 2015 (broken sensor) and 2018 (very little data) from
+  # the final infilled values, not just the predictor set.
   mutate(
     gl4_disch_inf = ifelse(wyear %in% c(2015, 2018), NA, gl4_disch_inf),
     discharge = ifelse(wyear == 2015 & local_site == "gl4", NA, discharge)
@@ -582,10 +610,8 @@ if (plot_in_code) {
     geom_point(color = "blue") +
     facet_wrap(~wyear, scales = "free_y", ncol = 4)
 }
-# repeat for albion##############################################################
-### gl4 infilling###############################################
-# infill alb off self in other wyrs (correlation with other sites basically
-# goes to 0 in winter months, which is what we are missing)
+# -- INFILL ALBION  --------------------------------------
+# Same approach as for GL4 above.
 
 df_wide <- infilled_df %>%
   filter(local_site %in% c("alb")) %>%
@@ -598,8 +624,8 @@ df_wide <- infilled_df %>%
 # add in the alb for all wyears
 for (yr in unique(df_wide$wyear)) {
   if (yr == 2021) {
-    next
-  } else { # 1 day only
+    next # only 1 day of data available for this water year
+  } else { 
     newdat <- df %>%
       mutate(yday = lubridate::yday(date), year = lubridate::year(date)) %>%
       mutate(wyear = ifelse(yday < 274, year, year + 1)) %>%
@@ -664,8 +690,9 @@ infilled_df <- infilled_df %>%
     rename(alb_disch_inf = discharge))
 
 if (plot_in_code) {
-  # looks ok-ish except 1999 is clearly
-  # all just super low (some management?)
+  # Looks reasonable overall, except 1999, where observed values are
+  # consistently very low across the whole year -- possibly a
+  # site-management change; worth investigating further.
   ggplot(infilled_df %>% filter(local_site == "alb" & date < "2020-10-01"), aes(x = yday, y = discharge)) +
     # geom_line(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='red')+
     # geom_point(data = infilled_df%>%filter(local_site=='sdl'), aes(x=date, y=discharge), color='blue')+
@@ -678,17 +705,18 @@ if (plot_in_code) {
     geom_point(color = "blue") +
     facet_wrap(~wyear, scales = "free_y")
 }
-# end infilling
 
-
+# Backup copy of the data at this stage, before final assembly, in case
+# any of the steps below need to be re-run or debugged separately.
 bu <- infilled_df
 
-##### join infilling to main data and plot all sites
-# plot all
+# -- ASSEMBLE FINAL GAP-FILLED DATASET ------------------------------------
+
 infilled_df <- infilled_df %>%
   mutate(is_infilled = ifelse(is.na(discharge), TRUE, FALSE)) %>%
   mutate(is_infilled = ifelse(yday < start | yday > end, TRUE, is_infilled)) %>%
-  # gaps of up to 3 d estimate by linear interpolation
+  # Fill any remaining short gaps (<=3 days) via linear interpolation
+  # before falling back on the site-specific imputed values
   group_by(local_site) %>%
   arrange(local_site, date) %>%
   mutate(discharge = zoo::na.approx(discharge, maxgap = 3, method = "linear")) %>%
@@ -708,6 +736,9 @@ infilled_df <- infilled_df %>%
     alb_disch_inf, discharge
   ))
 
+# Re-run the short-gap linear interpolation once more, since substituting
+# in the imputed values above can occasionally leave small new gaps
+# (e.g. at the boundary between observed and imputed data).
 
 infilled_df <- infilled_df %>%
   # gaps of up to 3 d in mart/sdl againn estimate by linear interpolation
@@ -717,389 +748,15 @@ infilled_df <- infilled_df %>%
   ungroup()
 
 
-# handful of very slightly negative values from
-# the back transform
+# The log-scale imputation can occasionally back-transform to a handful
+# of very slightly negative values; clip these to zero.
 
-#Generating a new data frame of infilled data for plotting (script to use= 2_plot_discharge_consortium.R)
 infilled_df <- infilled_df %>%
   mutate(discharge = ifelse((!is.na(discharge) & discharge < 0), 0, discharge))
 
-
+# Export the gap-filled dataset for use in streamflow_data_dashboard.R
 write.csv(infilled_df %>%
             select(local_site, date, discharge, yday, year, wyear, is_infilled),
           file.path(data_dir, paste0("spctl_", sp_control, ".csv")),
           row.names = FALSE
 )
-
-#Older code from SCE for writing infilled_df:
-#write.csv(infilled_df %>%
-#  select(local_site, date, discharge, yday, year, wyear, is_infilled),
-#paste0("infilled_data/spctl_", sp_control, ".csv"),
-#row.names = FALSE
-#)
-#infilled_df = read.csv("discharge/infilled_data/spctl_7.csv")
-
-## Calculating cum curves
-
-
-(ggplot(
-  infilled_df,
-  aes(x = date, y = discharge, color = is_infilled)
-) +
-  geom_point(size = 0.01) +
-  facet_wrap(~local_site, scales = "free_y", ncol = 1) +
-  scale_x_date(date_breaks = "years") +
-  theme(axis.text.x = element_text(angle = 90))) %>%
-  ggsave(
-    file = paste0("plots/overtime_spctl_", sp_control, ".jpg"),
-    width = 8, height = 4
-  )
-
-(ggplot(
-  infilled_df %>% filter(is_infilled == FALSE),
-  aes(x = yday, y = discharge, color = factor(year))
-) +
-  geom_line(size = 0.01) +
-  facet_wrap(~local_site, scales = "free_y", ncol = 1) +
-  # scale_x_date(date_breaks = "years")+
-  theme(axis.text.x = element_text(angle = 90))) %>%
-  ggsave(
-    file = paste0("plots/raw_by_year.jpg"),
-    width = 8, height = 4
-  )
-
-
-
-
-for (loc in unique(infilled_df$local_site)) {
-  (ggplot(
-    infilled_df %>% filter(local_site == loc) %>%
-      mutate(yday = ifelse(wyear != year, yday - 365, yday)),
-    aes(x = yday, y = discharge, color = is_infilled)
-  ) +
-    geom_point(size = 0.01) +
-    facet_wrap(~wyear, ncol = 2) +
-    # scale_x_date(date_breaks = "years")+
-    theme(axis.text.x = element_text(angle = 90))) %>%
-    ggsave(
-      file = paste0("plots/", loc, "byyear_spctl_", sp_control, ".jpg"),
-      height = 20, width = 5
-    )
-}
-
-# sce stop loop here
-# consider weighting by taking - over all yrs, mean proportion of total
-# discharge on each doy, then taking the weighted sum of days missing for wts,
-# if 0 data missing wts = 1, if all data missing wts = 0, if 50% of discharge
-# infilled wts = 0.5
-# if 25% of discharge missing wt = 0.75
-
-
-# also consider comparing all 4 versions to see if they look any different?
-
-
-wts <- infilled_df %>%
-  filter(is_infilled == FALSE) %>%
-  group_by(local_site, yday) %>%
-  summarize(mean_daily = mean(discharge, na.rm = TRUE)) %>%
-  left_join(infilled_df %>%
-    filter(is_infilled == FALSE) %>%
-    group_by(local_site, yday) %>%
-    summarize(mean_daily = mean(discharge, na.rm = TRUE)) %>%
-    filter(yday != 366) %>%
-    group_by(local_site) %>%
-    summarize(tot = sum(mean_daily))) %>%
-  mutate(prop = mean_daily / tot) %>%
-  full_join(., infilled_df)
-
-
-wts <- wts %>%
-  # always remove yday 366 so all yrs have same number of days
-  filter(yday < 366) %>%
-  # mutate(prop_this_year = prop * discharge)%>%
-  group_by(local_site, wyear, is_infilled) %>%
-  summarise(tot_disch = sum(prop, na.rm = TRUE)) %>%
-  # summarise(tot_disch = sum(prop_this_year, na.rm=TRUE))%>%
-  pivot_wider(names_from = is_infilled, values_from = tot_disch) %>%
-  mutate(`TRUE` = ifelse(is.na(`TRUE`), 0, `TRUE`)) %>%
-  mutate(prop_infilled = `TRUE` / (`FALSE` + `TRUE`))
-
-
-
-# find max date by wyear
-peak_flow <- infilled_df %>%
-  group_by(wyear, local_site) %>%
-  mutate(disch_ma_2 = slider::slide_dbl(discharge, mean,
-    .before = 2,
-    .after = 2
-  )) %>%
-  summarize(max_disch = max(disch_ma_2, na.rm = TRUE)) %>%
-  full_join(infilled_df) %>%
-  mutate(disch_ma_2 = slider::slide_dbl(discharge, mean,
-    .before = 2,
-    .after = 2
-  )) %>%
-  rowwise() %>%
-  filter(max_disch == disch_ma_2) %>%
-  filter(wyear < 2021)
-
-# need to pull out some weird albion winter floods
-# here, prob the 2013 floods too, and the last year
-# but there's not really a super strong movement of the peak date
-# more that the q50 is getting earlier but not the peak
-ggplot(peak_flow, aes(x = wyear, y = yday)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site) +
-  ggtitle("timing of peak flow")
-
-# do q50s for these
-tots <- infilled_df %>%
-  # always remove yday 366 so all yrs have same number of days
-  filter(yday < 366) %>%
-  group_by(local_site, wyear) %>%
-  summarise(
-    tot_disch = sum(discharge, na.rm = TRUE),
-    tot_day = sum(!is.na(discharge))
-  ) %>%
-  # use only complete years
-  mutate(tot_disch = ifelse(tot_day != 365, NA, tot_disch)) %>%
-  mutate(
-    disch_50 = tot_disch / 2,
-    disch_20 = tot_disch / 5,
-    disch_80 = 4 * (tot_disch / 5)
-  ) %>%
-  left_join(., wts %>% select(local_site, wyear, prop_infilled))
-
-
-
-
-
-#
-# tots = infilled_df %>%
-#   #always remove yday 366 so all yrs have same number of days
-#   filter(yday<366)%>%
-#   group_by(local_site, wyear)%>%
-#   summarise(tot_disch = sum(discharge, na.rm=TRUE),
-#             tot_day = sum(!is.na(discharge)))%>%
-#   #use only complete years
-#   mutate(tot_disch = ifelse(tot_day!=365, NA, tot_disch))%>%
-#   mutate(disch_50 = tot_disch/2,
-#          disch_20 = tot_disch/5,
-#          disch_80 = 4*(tot_disch/5))
-
-
-
-
-
-
-
-
-
-avg_tots <- tots %>%
-  group_by(local_site) %>%
-  summarize(tot_disch = mean(tot_disch, na.rm = TRUE)) %>%
-  mutate(
-    disch_50_all = tot_disch / 2,
-    disch_20_all = tot_disch / 5,
-    disch_80_all = 4 * (tot_disch / 5)
-  )
-
-#        nday = )%>%
-# cut out incomplete years by site
-# mutate(tot_disch = ifelse((local_site=='mar'&(wyear>2019|wyear<1983)), NA, tot_disch))%>%
-# mutate(tot_disch = ifelse((local_site=='sdl'&(wyear>2020|wyear<2000)), NA, tot_disch))%>%
-# mutate(tot_disch = ifelse((wyear>2020), NA, tot_disch))%>%
-# mutate(tot_disch = ifelse((wyear%in%c(2015, 2018)&local_site=='gl4'), NA, tot_disch))%>%
-# mutate(tot_disch = ifelse((wyear%in%c(1981)&local_site=='alb'), NA, tot_disch))%>%
-# mutate(disch_50 = tot_disch/2,
-#        disch_20 = tot_disch/5,
-#        disch_80 = 4*(tot_disch/5))
-
-# plot
-q50 <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_50, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q50 = min(yday), .groups = "drop") %>%
-  left_join(., tots)
-
-
-q50_mean <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(avg_tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_50_all, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q50_mean = min(yday), .groups = "drop")
-
-
-q20 <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_20, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q20 = min(yday), .groups = "drop")
-
-# sce need to remake these so the q20 can be negative if it's in the fall
-# for alb etc.
-q20_mean <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(avg_tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_20_all, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q20_mean = min(yday), .groups = "drop")
-
-
-
-q80 <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_80, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q80 = min(yday), .groups = "drop")
-
-q80_mean <- infilled_df %>%
-  # select(-tot_disch)%>%
-  # left_join(., tots)%>%
-  group_by(wyear, local_site) %>%
-  arrange(date) %>%
-  mutate(cum_discharge = cumsum(discharge)) %>%
-  ungroup() %>%
-  left_join(avg_tots) %>%
-  rowwise() %>%
-  mutate(thresh = ifelse(cum_discharge > disch_80_all, 1, 0)) %>%
-  group_by(wyear, local_site) %>%
-  filter(thresh == 1) %>%
-  summarize(q80_mean = min(yday), .groups = "drop")
-
-
-q50 <- q50 %>%
-  left_join(., q20) %>%
-  left_join(., q80) %>%
-  left_join(., q50_mean) %>%
-  left_join(., q20_mean) %>%
-  left_join(., q80_mean) %>%
-  mutate(duration = q80 - q20) %>%
-  mutate(duration_mean = q80_mean - q20_mean)
-
-
-
-# martinelli does seem like it's discharging a bit earlier over time.
-# but over just the past 20 yrs
-# discharge is actually a bit later in both earlier over time.
-ggplot(q50, aes(x = wyear, y = q50, color = prop_infilled)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site) +
-  ggtitle("q50 over time")
-
-# alb and gl4 to melt out earlier (spring)
-# but note we need to pee
-
-
-ggplot(q50, aes(x = wyear, y = q50_mean, color = prop_infilled)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site) +
-  ggtitle("q50 (date hitting all-time mean 50% discharge) over time")
-
-
-
-# strong relationship as expected for snowmelt-dominated systems
-# the median discharge date is later in high total discharge years
-ggplot(q50, aes(x = tot_disch, y = q50)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site, scales = "free_x")
-
-
-# but they hit the 50% of all-time average discharge earlier in high discharge
-# yrs bc the whole discharge is elevated
-ggplot(q50, aes(x = tot_disch, y = q50_mean)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site, scales = "free_x")
-
-# which I think means in high water years vs low water years, the most
-# pronounced differences are in the 2nd half of the season? ie
-# water is pretty invariant in the spring but more variable in the summer drying
-# out period
-
-# duration stuff starts here, not quite right
-vars <- infilled_df %>%
-  filter(yday != 366) %>%
-  mutate(month = lubridate::month(date)) %>%
-  group_by(local_site, year, month) %>%
-  summarize(tot = sum(discharge), nday = dplyr::n()) %>%
-  filter(nday >= 28)
-
-# for gl4 and albion
-# years with more tot discharge, the 60% of middle flows
-# are spread out over a shorter period of time (q20 - q80)
-# this is not the case for mart or sdl though
-ggplot(q50, aes(x = tot_disch, y = duration)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site, scales = "free_x")
-
-# if you look at the seasonality of the average 20-80 pct flows
-# for mart and saddle, the high discharge years are actually the shortest
-ggplot(q50, aes(x = tot_disch, y = duration_mean)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site, scales = "free_x")
-
-
-# show the relationship, earlier years, longer duration
-# in general..
-ggplot(q50, aes(x = q50, y = duration_mean)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~local_site)
-
-# we really need to add peak swe to this
-# but
-mod <- lm(duration ~ tot_disch + q50,
-  data =
-    q50 %>% filter(local_site == "mar")
-)
-
-
-#infilling of gl4, alb start HERE
-
