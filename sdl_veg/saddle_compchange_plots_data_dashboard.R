@@ -1,5 +1,5 @@
 # ============================================================================
-# Niwot Ridge LTER Data Dashboard: Saddle Vegetation Growth Form Figures
+# Niwot Ridge LTER Data Dashboard: Saddle Vegetation Percent Cover Figures
 # ============================================================================
 #
 # Purpose:
