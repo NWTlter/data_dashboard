@@ -229,6 +229,7 @@ g1 <- ggplot(by.yr.anom) +
     legend.position = "none",
     axis.line.x = element_line(color = "gray50"),
     axis.minor.ticks.length = rel(0.5),
+    plot.title = element_text(margin = margin(b = 0)),
     plot.margin = margin(t = 5.5, r = 44, b = 5.5, l = 5.5)
   ) +
   # secondary-axis title placed manually so it's centered on the 1:1 (log2(1))
