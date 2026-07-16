@@ -1,12 +1,11 @@
-# plot sdl spp comp by growth form
-# SCE 10 Jan 2022
-# updated 14 Aug 2025
+# Plots Saddle species composition by growth form
+# Initial script developed by M. Oldfather and modivided by
+# SCE (10 Jan 2022, updated 14 Aug 2025)
+# Revised and updated for the data dashboard by Anne Marie Panetta (2026)
 
-# Credit for basic workflow for downloading/top subsetting/cleaning from
-# M Oldfather script
 
 # -- SETUP -----
-# clean up enviro, read in needed libraries
+# clean up environment, read in needed libraries
 rm(list = ls())
 library(tidyverse)
 library(svglite)
