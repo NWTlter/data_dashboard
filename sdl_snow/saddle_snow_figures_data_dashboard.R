@@ -2,7 +2,9 @@
 # ============================================================================
 # Niwot Ridge LTER Data Dashboard: Snow Depth Figures
 # ============================================================================
-#
+# Initial code developed by Sarah C. Elmemdorf (2023)
+# Code revised and updated for the data dashboard by Anne Marie Panetta (2026)
+
 # Purpose:
 #   Reads Saddle grid snow depth survey data and produces:
 #
