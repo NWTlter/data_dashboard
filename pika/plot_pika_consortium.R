@@ -248,5 +248,5 @@ g1 <- ggplot(by.yr.anom) +
 
 ggsave(g1,
   file = file.path(plot_dir, "pika_ja_ratio.png"),
-  scale = 0.7, width = 8, height = 6
+  scale = 0.6, width = 10, height = 6
 )
