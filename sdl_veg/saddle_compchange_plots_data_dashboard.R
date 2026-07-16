@@ -1,67 +1,117 @@
-# Plots Saddle species composition by growth form
-# Initial script developed by M. Oldfather and modivided by
-# SCE (10 Jan 2022, updated 14 Aug 2025)
-# Revised and updated for the data dashboard by Anne Marie Panetta (2026)
+# ============================================================================
+# Niwot Ridge LTER Data Dashboard: Saddle Vegetation Growth Form Figures
+# ============================================================================
+#
+# Purpose:
+#   Reads Saddle grid point-quadrat vegetation survey data, classifies each
+#   hit by growth form (forb, graminoid, shrub, moss, lichen), and produces:
+#
+#     1. sdl_veg_anom.jpg               Percent cover anomaly by growth form,
+#                                        relative to each form's long-term mean
+#     2. sdl_veg_abs.jpg                Absolute percent cover by growth form
+#     3. sdl_veg_abs_horizontal.jpg     Same as (2), panels in a single row
+#
+# Input:
+#   data/saddptqd.hh.data.csv     -- Saddle grid point-quadrat vegetation
+#                                     survey, one row per point/hit
+#                                     (EDI knb-lter-nwt.93)
+#   data/pspecies_clean.js.data.csv -- species list with growth form
+#                                     assignments (EDI knb-lter-nwt.91)
+#
+# Output:
+#   Three JPG figures written to figures_dir (see file names above).
+#
+# TODO
+#   - some USDA codes still lack a growth_habit assignment; check
+#     unique(sdlcomp$USDA_name[is.na(sdlcomp$growth_habit)]) after any
+#     data refresh and extend the manual assignment rules below if needed
+#
+# Original analysis: M. Oldfather, revised by Sarah C. Elmendorf,
+#   10 Jan 2022, updated 14 Aug 2025
+# Revised and updated for the Data Dashboard: Anne Marie Panetta, 2026
+# ============================================================================
 
+# -- SETUP --------------------------------------------------------------
 
-# -- SETUP -----
-# clean up environment, read in needed libraries
 rm(list = ls())
+
 library(tidyverse)
 library(svglite)
 library(EDIutils)
 library(lemon)
 library(ggthemes)
+
 options(stringsAsFactors = F)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
 
-# only need to download once
+# Anchor the working directory explicitly. 
+# Update this if the project folder is ever moved or cloned elsewhere.
+setwd("/Users/lter/Documents/GitHub/NWT LTER Data Dashboard/sdl_veg")
+
+
+data_dir <- "data"
+figures_dir <- "figures"
+
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
+
+# Set to TRUE to (re)download source data from EDI. Only needs to be run
+# once, or when a newer package version is released.
 download_data <- FALSE
 
-# download data -----------------------------------------------------------
-# note if you have already downloaded SOME data the read_data_package_archive
-# function will bork as it doesn't want to overwrite, so clear your /data
-# directories and then rerun
+# -- DOWNLOAD DATA FROM EDI ---------------------------------------------
+# Note: if you have already downloaded SOME data, read_data_package_archive()
+# will not overwrite existing files. Clear the /data directory first if you
+# need to force a fresh download.
 if (download_data) {
-  # download the data from EDI
-  scope <- "knb-lter-nwt" # Niwot scope
-
-  # note the overwrite argument does not work so clear out any existing
-  # copies before running this
-  for (id in c(
-    "93", # saddle grid spp comp
-    "91" # growth forms
-  )) {
-    # ask EDI to tell me what the most current version is
-    revision <- list_data_package_revisions(scope, id, filter = "newest")
-
-    # display current version - > this is referred to as the "packageID"
-    packageID <- paste(scope, id, revision, sep = ".")
-
-    # download the data
-    read_data_package_archive(packageID, path = "sdl_veg/data")
-    print(read_data_package_citation(packageID))
-
-    # "Walker, M., H. Humphries, and Niwot Ridge LTER. 2025. Plant species composition data for Saddle grid, 1989 - ongoing. ver 10. Environmental Data Initiative. https://doi.org/10.6073/pasta/1427abaa317306bd0524046c0276b708. Accessed 2025-08-14."
-    # "Smith, J., H. Humphries, M. Walker, and Niwot Ridge LTER. 2025. Plant species list for Niwot Ridge and Green Lakes Valley, 1970 - ongoing. ver 3. Environmental Data Initiative. https://doi.org/10.6073/pasta/e96e1b8ce6d356154fb3a85eab96a106. Accessed 2025-08-14."
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
   }
-
-  # overwrites the manifests but don't really need them.
-  for (fname in list.files("sdl_veg/data",
-    pattern = "knb-lter.*zip",
-    full.names = TRUE
-  )) {
-    unzip(zipfile = fname, exdir = "sdl_veg/data/")
+  
+  scope <- "knb-lter-nwt"  # Niwot scope
+  
+  # Data packages, with current citations (update as package versions change):
+  #
+  #   93 -- Saddle grid species composition
+  #     Walker, M., H. Humphries, and Niwot Ridge LTER. 2025. Plant species
+  #     composition data for Saddle grid, 1989 - ongoing. ver 10.
+  #     Environmental Data Initiative.
+  #     https://doi.org/10.6073/pasta/1427abaa317306bd0524046c0276b708
+  #
+  #   91 -- growth forms
+  #     Smith, J., H. Humphries, M. Walker, and Niwot Ridge LTER. 2025.
+  #     Plant species list for Niwot Ridge and Green Lakes Valley,
+  #     1970 - ongoing. ver 3. Environmental Data Initiative.
+  #     https://doi.org/10.6073/pasta/e96e1b8ce6d356154fb3a85eab96a106
+  
+  # Note: the overwrite argument does not work, so clear out any existing
+  # copies before running this loop.
+  for (id in c("93", "91")) {
+    revision <- list_data_package_revisions(scope, id, filter = "newest")
+    packageID <- paste(scope, id, revision, sep = ".")
+    
+    read_data_package_archive(packageID, path = data_dir)
+    print(read_data_package_citation(packageID)) # confirm you're citing the version actually used
+  }
+  
+  for (fname in list.files(data_dir, pattern = "knb-lter.*zip", full.names = TRUE)) {
+    unzip(zipfile = fname, exdir = data_dir)
   }
 }
 
-# saddle comp by growth form ----------------------------------------------
 
-sdlcomp <- read.csv("sdl_veg/data/saddptqd.hh.data.csv", na.strings = na_vals)
-sdlgf <- read.csv("sdl_veg/data/pspecies_clean.js.data.csv", na.strings = na_vals)
+# -- READ DATA ------------------------------------------------------------
 
-# one gf error identified Jan 2026 not yet fixed on the portal
+sdlcomp <- read.csv(file.path(data_dir, "saddptqd.hh.data.csv"), na.strings = na_vals)
+sdlgf <- read.csv(file.path(data_dir, "pspecies_clean.js.data.csv"), na.strings = na_vals)
+
+
+# -- CLEAN DATA -----------------------------------------------------------
+# One growth-form error identified Jan 2026, not yet fixed on the portal:
+# a lichen was mislabeled as litter for plot 1 in 2024.
+
 sdlcomp <- mutate(
   sdlcomp,
   USDA_name = case_when(
@@ -74,7 +124,8 @@ sdlcomp <- mutate(
   )
 )
 
-# subset to usda only not duplicated
+# Join in growth form, keeping only one row per USDA code (the species list
+# can contain duplicate entries for a given code).
 gf_join <- sdlgf %>%
   select(USDA_code, family, category, group, growth_habit) %>%
   distinct() %>%
@@ -83,10 +134,16 @@ gf_join <- sdlgf %>%
 sdlcomp <- sdlcomp %>%
   left_join(., gf_join)
 
+# Spot-check which USDA names still lack a growth form after the join --
+# these get manually assigned below.
 unique(sdlcomp$USDA_name[is.na(sdlcomp$growth_habit) | sdlcomp$growth_habit == ""])
 unique(sdlcomp$USDA_name[is.na(sdlcomp$growth_habit)])
 
-# could more efficiently do with case_when but ordered mutate works ok for now
+# Manually assign growth form for entries not resolved by the species-list
+# join (non-plant hits like rock/soil/scat, and a handful of plant genera
+# not yet catalogued). Could be done more efficiently with case_when, but
+# this ordered mutate() approach works fine for the current data size.
+
 sdlcomp <- sdlcomp %>%
   mutate(
     growth_habit = ifelse((is.na(growth_habit) & grepl("Rock|Bare|Hole|soil", USDA_name)), "soil", growth_habit),
@@ -102,13 +159,17 @@ sdlcomp <- sdlcomp %>%
     growth_habit = ifelse((is.na(growth_habit) & grepl("marker", USDA_name)), "marker", growth_habit)
   )
 
-# some don't yet have growth form, assign
-# unique (sdlcomp$USDA_name[is.na(sdlcomp$growth_habit)])
+# Some USDA names still won't have a growth form assigned at this point --
+# check the TODO note at the top of the file if this list is non-empty.
+# unique(sdlcomp$USDA_name[is.na(sdlcomp$growth_habit)])
 
-# change year = 1996 to 1995 for plot 37 (sampled one year late for a couple of plots)
+# Plot 37 was sampled one year late in a couple of cases; treat those
+# 1996 records as if collected in 1995 for consistency with other plots.
+
 sdlcomp[sdlcomp$year == 1996, "year"] <- 1995
 
-# subset to only top hit (or bottom hit if no top hit present), by point
+# Subset to one hit per point: the top hit if present, otherwise the
+# bottom hit.
 sdl_top <-
   sdlcomp %>%
   filter(hit_type == "bottom" | hit_type == "top") %>%
@@ -119,28 +180,37 @@ sdl_top <-
   # add subshrubs to shrubs (Salix nivalis)
   mutate(growth_habit = ifelse(grepl("shrub", growth_habit), "shrub", growth_habit))
 
+# -- SUMMARIZE COVER BY GROWTH FORM ----------------------------------------
 
-# aggregate data_file to calculate the number of hits
+
+# Count hits per growth form, per plot per year.
 number_hits <- sdl_top %>%
   # add subshrubs to shrubs
   group_by(year, plot, growth_habit) %>%
   summarise(hits = dplyr::n(), .groups = "drop")
 
-# Fill in zeros for species/non-species not hit in a certain plot/year
-data_with_zeros <- expand_grid(year = unique(number_hits$year), plot = unique(number_hits$plot), growth_habit = unique(number_hits$growth_habit))
-data_with_zeros
+# Fill in explicit zeros for growth forms not hit in a given plot/year,
+# so averages below aren't biased upward by only counting years/plots
+# where a form was actually present.
+data_with_zeros <- expand_grid(
+  year = unique(number_hits$year),
+  plot = unique(number_hits$plot),
+  growth_habit = unique(number_hits$growth_habit)
+)
 
-# make abundance data frame
+
 number_hits <- left_join(data_with_zeros, number_hits)
 number_hits[is.na(number_hits$hits), "hits"] <- 0
 
 
-# aggregate w the zeros
+# Average across plots, by year and growth form.
 number_hits_by_year <- number_hits %>%
   # add subshrubs to shrubs (Salix nivalis)
   group_by(year, growth_habit) %>%
   summarise(mean_cover = mean(hits))
 
+# Quick look at all growth forms' trends before filtering to the ones used
+# in the figures below.
 ggplot(
   number_hits_by_year,
   aes(x = year, y = mean_cover, group = growth_habit, color = growth_habit)
@@ -148,6 +218,12 @@ ggplot(
   geom_line() +
   facet_wrap(~growth_habit)
 
+# -- DERIVE ANOMALIES -------------------------------------------------------
+
+# Anomaly = each year's mean cover minus that growth form's long-term mean
+# cover. Restricted to the five growth forms shown in the dashboard
+# figures; "nonvascular"/"lichenous" are relabeled to the more familiar
+# "moss"/"lichen".
 
 anom_growth_form <- number_hits_by_year %>%
   group_by(growth_habit) %>%
@@ -170,21 +246,50 @@ anom_growth_form <- number_hits_by_year %>%
     )
   ))
 
-# plot
+# ============================================================================
+# FIGURE 1: Percent cover anomaly by growth form
+# ============================================================================
+# Each panel shows one growth form's cover anomaly (difference from its own
+# long-term mean), colored by direction.
+
 g1 <- ggplot(anom_growth_form, aes(x = year, y = anom_cov)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("green4", "chocolate4")) +
-  labs(y = "Percent cover \n difference from long-term mean", x = "") +
-  # scale_y_symmetric(sec.axis = sec_axis(trans = I, breaks = NULL, name = expression(more %<->% less))) +
+  labs(y = "Percent cover \n (Difference from long-term mean)", x = "Year", title = "Percent cover anomalies by growth form") +
+  scale_x_continuous(
+    breaks = seq(
+      10 * floor(min(anom_growth_form$year) / 10),
+      10 * ceiling(max(anom_growth_form$year) / 10),
+      by = 10
+    ),
+    minor_breaks = seq(
+      5 * floor(min(anom_growth_form$year) / 5),
+      5 * ceiling(max(anom_growth_form$year) / 5),
+      by = 5
+    ),
+    guide = guide_axis(minor.ticks = TRUE)  # 5-yr minor ticks alongside 10-yr labeled major ticks
+  ) +
   theme_hc() +
   facet_wrap(~growth_habit, scales = "free_y") +
-  theme(legend.position = "none")
+  theme(
+    legend.position = "none",
+    axis.minor.ticks.length = rel(0.5),
+    plot.title = element_text(hjust = 0, margin = margin(b = 20)),
+    plot.title.position = "plot"
+  )
 
 ggsave(g1,
-  file = file.path("sdl_veg", "figures", "sdl_veg.jpg"),
-  scale = 0.8, width = 10, height = 6, dpi = 600
+       file = file.path(figures_dir, "sdl_veg_anom.jpg"),
+       scale = 0.5, width = 15, height = 10, dpi = 600
 )
-# version that shows absolute cover by growth form (with extra headroom per panel)
+
+# ============================================================================
+# FIGURE 2: Absolute percent cover by growth form
+# ============================================================================
+# Companion figure to Figure 1, showing raw cover rather than anomalies, so
+# growth forms can also be compared in absolute terms. Extra headroom is
+# added above each panel so the highest bar isn't flush with the panel edge.
+
 g2 <- anom_growth_form |>
   ggplot(aes(x = year, y = mean_cover, fill = growth_habit)) +
   geom_col(width = 0.75, alpha = 0.95, color = NA) +
@@ -199,9 +304,8 @@ g2 <- anom_growth_form |>
     ),
     guide = "none"
   ) +
-  # add ~5% whitespace above the top of each panel
-  scale_y_continuous(expand = expansion(mult = c(0, 0.23))) +
-  labs(y = "Percent cover", x = "") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.23))) +  # ~5% white space above the tallest bar
+  labs(y = "Percent cover", x = "Year", title= "Saddle vegetation cover by growth form") +
   theme_hc() +
   facet_wrap(~growth_habit, scales = "free_y") +
   theme(
@@ -212,24 +316,22 @@ g2 <- anom_growth_form |>
     panel.grid.major.x = element_blank(),
     panel.grid.major.y = element_line(color = "grey92"),
     panel.grid.minor = element_blank(),
-    plot.margin = margin(t = 6, r = 8, b = 6, l = 6)
+    plot.margin = margin(t = 6, r = 8, b = 6, l = 6),
+    plot.title = element_text(hjust = 0, margin = margin(b = 20)),
+    plot.title.position = "plot"
   )
 
 ggsave(g2,
-  file = file.path("sdl_veg", "figures", "sdl_veg_abs.jpg"),
-  scale = 0.8, width = 10, height = 6, dpi = 600
+       file = file.path(figures_dir, "sdl_veg_abs.jpg"),
+       scale = 0.8, width = 10, height = 10, dpi = 600
 )
 
+# Alternate layout of Figure 2 for different display contexts (e.g. a
+# single wide row for a dashboard banner, or a single tall column for a
+# narrow sidebar).
 ggsave(g2 + facet_wrap(~growth_habit, scales = "free_y", nrow = 1),
-       file = file.path("sdl_veg", "figures", "sdl_veg_abs_horizontal.jpg"),
+       file = file.path(figures_dir, "sdl_veg_abs_horizontal.jpg"),
        scale = 0.8, width = 10, height = 3, dpi = 600
 )
-
-ggsave(g2 + facet_wrap(~growth_habit, scales = "free_y", ncol = 1),
-       file = file.path("sdl_veg", "figures", "sdl_veg_abs_vertical.jpg"),
-       scale = 0.8, width = 3, height = 10, dpi = 600
-)
-
-
 
 g2
