@@ -255,7 +255,7 @@ anom_growth_form <- number_hits_by_year %>%
 g1 <- ggplot(anom_growth_form, aes(x = year, y = anom_cov)) +
   geom_col(aes(fill = posneg)) +
   scale_fill_manual(values = c("green4", "chocolate4")) +
-  labs(y = "Percent cover \n (Difference from long-term mean)", x = "Year", title = "Percent cover anomalies by growth form") +
+  labs(y = "Percent cover \n (Difference from long-term mean)", x = "Year") +
   scale_x_continuous(
     breaks = seq(
       10 * floor(min(anom_growth_form$year) / 10),
@@ -305,7 +305,7 @@ g2 <- anom_growth_form |>
     guide = "none"
   ) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.23))) +  # ~5% white space above the tallest bar
-  labs(y = "Percent cover", x = "Year", title= "Saddle vegetation cover by growth form") +
+  labs(y = "Percent cover", x = "Year") +
   theme_hc() +
   facet_wrap(~growth_habit, scales = "free_y") +
   theme(
