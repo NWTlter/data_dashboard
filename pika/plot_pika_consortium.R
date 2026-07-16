@@ -1,9 +1,8 @@
-# Created by SCE 1/12/2022
-# Based on C Ray equivalent script
-# that has more details but different aesthetics in figs
+# Initial code created by SCE (2022) based on script by Chris Ray
+# that has more details but different aesthetics in figs:
 # script-pika-juvie-capture-ratio-vs-GDD.R
-# updated by SCE 6 July 2026 to use log ratios
-# updated by Anne Marie Panetta July 2026 for data dashboard
+# Updated by SCE (July 2026) to use log ratios
+# Revised and updated for data dashboard by Anne Marie Panetta (July 2026)
 ##########################
 
 # -- SETUP ------
@@ -180,6 +179,16 @@ x_label_pos <- max(by.yr.anom$year, na.rm = TRUE) + year_range * 0.15
 # axis.title.y, in pt); annotate()/geom_text size is in mm, hence the /.pt
 axis_title_size <- calc_element("axis.title.y", theme_hc())$size / .pt
 
+# x position for the manual secondary-axis label: comfortably past the
+# fixed panel edge (and past the right-hand tick marks), in the blank margin
+x_label_pos <- max(by.yr.anom$year, na.rm = TRUE) + year_range * 0.15
+
+row_label <- data.frame(
+  x = x_label_pos,
+  y = 0,
+  label = "higher~recruitment  %<->%  lower~recruitment"  # plotmath expression for the arrow glyph
+)
+
 g1 <- ggplot(by.yr.anom) +
   geom_rect(aes(
     xmin = year - bar_half_width, xmax = year + bar_half_width,
@@ -189,27 +198,47 @@ g1 <- ggplot(by.yr.anom) +
   scale_fill_manual(values = c("#5E3C99", "#E1A100")) +
   geom_hline(
     yintercept = unique(by.yr.anom$mean_log_ratio),
-    linetype = "dotted", color = "grey50", linewidth = 1
+    linetype = "longdash", color = "gray70", linewidth = 0.6
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dotted", color = "black", linewidth = 0.6
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      10 * floor(min(by.yr.anom$year) / 10),
+      10 * ceiling(max(by.yr.anom$year) / 10),
+      by = 10
+    ),
+    minor_breaks = seq(
+      5 * floor(min(by.yr.anom$year) / 5),
+      5 * ceiling(max(by.yr.anom$year) / 5),
+      by = 5
+    ),
+    guide = guide_axis(minor.ticks = TRUE)  # 5-yr minor ticks alongside 10-yr labeled major ticks
   ) +
   scale_y_continuous(
     breaks = log2(c(1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8)),
     labels = c("1:8", "1:4", "1:2", "1:1", "2:1", "4:1", "8:1"),
     sec.axis = sec_axis(trans = I, breaks = 0, labels = "")
   ) +
-  labs(y = "Pika juvenile:adult ratio", x = "") +
+  labs(y = "Pika juvenile:adult ratio", x = "Year", 
+       title = "Pika recruitment anomalies") +
   theme_hc() +
   theme(
     legend.position = "none",
+    axis.line.x = element_line(color = "gray50"),
+    axis.minor.ticks.length = rel(0.5),
     plot.margin = margin(t = 5.5, r = 44, b = 5.5, l = 5.5)
   ) +
   # secondary-axis title placed manually so it's centered on the 1:1 (log2(1))
   # break, since ggplot always vertically centers a sec_axis name on the
   # whole panel instead of on a specific break
-  annotate(
-    "text",
-    x = x_label_pos, y = 0,
-    label = "higher recruitment ↔ lower recruitment",
-    angle = -90, hjust = 0.5, vjust = 0.5, size = axis_title_size
+  geom_text(
+    data = row_label,
+    aes(x = x, y = y, label = label),
+    angle = -90, hjust = 0.5, vjust = 0.5, size = axis_title_size,
+    inherit.aes = FALSE, parse = TRUE
   ) +
   coord_cartesian(
     xlim = x_panel_lim,
