@@ -286,7 +286,7 @@ g1 <- ggplot(snow_anom, aes(x = year, y = depth_anom)) +
   )
 ggsave(g1,
        file = file.path(figures_dir, "sdl_snow_anom.png"),
-       scale = 0.8, width = 10, height = 6
+       scale = 0.6, width = 10, height = 6
 )
 
 # Within-season anomaly (rather than a single May snapshot) was also
