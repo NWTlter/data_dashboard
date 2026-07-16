@@ -468,7 +468,7 @@ g3 <- ggplot(summer_disch_last_yr %>% ungroup(), aes(x = date)) +
   ylab("Streamflow (cubic meters)") +
   theme_hc() +
   labs(
-    title = "Green Lake 4 Summer Streamflow",
+    #title = "Green Lake 4 Summer Streamflow",
     #subtitle = "Daily streamflow vs. historical range"
   ) +
   theme(
