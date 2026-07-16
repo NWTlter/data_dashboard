@@ -263,9 +263,9 @@ snow_anom <- snowdata %>%
 
 g1 <- ggplot(snow_anom, aes(x = year, y = depth_anom)) +
   geom_col(aes(fill = posneg)) +
-  scale_fill_manual(values = c("#5B8FC7", "#C77A96")) +  # blue/pink, snowier vs less snowy
+  scale_fill_manual(values = c("#4A9FE8", "#E85D8A")) +  # blue/pink, snowier vs less snowy
   labs(
-    title = "Saddle Snow Depth Anomalies",
+    title = "May Snow Depth Anomalies",
     y = "Spring snow depth \n (% difference from long-term mean)",
     x = "Year"
   ) +
