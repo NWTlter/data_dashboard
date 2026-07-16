@@ -317,7 +317,7 @@ g2 <- anom_growth_form |>
     panel.grid.major.y = element_line(color = "grey92"),
     panel.grid.minor = element_blank(),
     plot.margin = margin(t = 20, r = 8, b = 6, l = 0),
-    plot.title = element_text(hjust = 0, margin = margin(t=10, b = 20)),
+    plot.title = element_text(hjust = 0, margin = margin(t=10, b = 30)),
     plot.title.position = "plot"
   )
 
@@ -331,7 +331,6 @@ ggsave(g2,
 # narrow sidebar).
 ggsave(g2 + facet_wrap(~growth_habit, scales = "free_y", nrow = 1),
        file = file.path(figures_dir, "sdl_veg_abs_horizontal.jpg"),
-       scale = 0.8, width = 10, height = 3, dpi = 600
+       scale = 0.8, width = 10, height = 5, dpi = 600
 )
 
-g2
