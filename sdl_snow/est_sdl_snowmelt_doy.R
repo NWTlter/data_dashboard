@@ -2,6 +2,7 @@
 # from weekly/biweekly/sometimes more snow surveys
 # SCE 11 July 2025
 # note you will need 4 cores and some time to run this code
+# Revised and updated for the data dashboard by Anne Marie Panetta (2026)
 
 # -- SETUP ------
 library(tidyverse) # munging
@@ -11,14 +12,23 @@ library(tidyverse) # munging
 library(brms) # gap fill snowmelt dates
 library(EDIutils) # Handy tools for interacting with EDI's API
 
+# Anchor working directory to this script's location (RStudio only)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
 # only need to download once
-download_data <- FALSE
+download_data <- TRUE
 
 #slow to run, might want to run only once
-run_bayesian_models <-FALSE
+run_bayesian_models <-TRUE
+
+data_dir <- "data"
+figures_dir <- "figures"
+
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
 
 # functions -----------------------------------------------------------
-
 # download data -----------------------------------------------------------
 # note if you have already downloaded SOME data the read_data_package_archive
 # function will bork as it doesn't want to overwrite, so clear your /data
@@ -26,6 +36,10 @@ run_bayesian_models <-FALSE
 if (download_data) {
   # download the data from EDI
   # 31 is sdl snow
+  # Citation (update so you know to cite correctly): Walker, D., J. Morse, and Niwot Ridge LTER. 2025. 
+  #Snow depth data for Saddle grid, 1992 - ongoing. ver 22. 
+  #Environmental Data Initiative. 
+  #https://doi.org/10.6073/pasta/373278a850606e58d0cee389fbbad88b
   
   data_dir <- file.path("sdl_snow", "data")
   if (!dir.exists(data_dir)) {
@@ -48,9 +62,6 @@ if (download_data) {
     print(read_data_package_citation(packageID))
   }
   
-  # update the below so you remember to cite it correctly
-  # [1] "Walker, D., J. Morse, and Niwot Ridge LTER. 2024. Snow depth data for Saddle grid, 1992 - ongoing. ver 21. Environmental Data Initiative. https://doi.org/10.6073/pasta/54fd300090a4859ad3083805e98bc823. Accessed 2025-07-11."
-  # overwrites the manifests but don't really need them.
   for (fname in list.files(data_dir,
                            pattern = "knb-lter.*zip",
                            full.names = TRUE
@@ -323,3 +334,5 @@ write.csv(pp_2 %>%
             select(year, grid_pt,last_snow_adj, snowmelt_adj, snowmelt_est, Estimate, Est.Error, Q2.5, Q97.5),
           file = file.path('sdl_snow', 'data_deriv', 'snowmelt_est_adj.csv'),
           row.names = FALSE)
+
+

@@ -469,7 +469,7 @@ g3 <- ggplot(summer_disch_last_yr %>% ungroup(), aes(x = date)) +
   theme_hc() +
   labs(
     title = "Green Lake 4 Summer Streamflow",
-    subtitle = "Daily streamflow vs. historical range"
+    #subtitle = "Daily streamflow vs. historical range"
   ) +
   theme(
     plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
@@ -477,7 +477,7 @@ g3 <- ggplot(summer_disch_last_yr %>% ungroup(), aes(x = date)) +
   )
 
 ggsave(g3,
-       file = file.path(figures_dir, "streamflow_summer_gl4_2024.png"),
+       file = file.path(figures_dir, "streamflow_summer_gl4.png"),
        scale = 0.6, width = 8, height = 6
 )
 
