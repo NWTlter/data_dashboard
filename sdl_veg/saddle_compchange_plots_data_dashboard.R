@@ -316,14 +316,14 @@ g2 <- anom_growth_form |>
     panel.grid.major.x = element_blank(),
     panel.grid.major.y = element_line(color = "grey92"),
     panel.grid.minor = element_blank(),
-    plot.margin = margin(t = 6, r = 8, b = 6, l = 6),
-    plot.title = element_text(hjust = 0, margin = margin(b = 20)),
+    plot.margin = margin(t = 20, r = 8, b = 6, l = 0),
+    plot.title = element_text(hjust = 0, margin = margin(t=10, b = 20)),
     plot.title.position = "plot"
   )
 
 ggsave(g2,
        file = file.path(figures_dir, "sdl_veg_abs.jpg"),
-       scale = 0.8, width = 10, height = 10, dpi = 600
+       scale = 0.5, width = 15, height = 10, dpi = 600
 )
 
 # Alternate layout of Figure 2 for different display contexts (e.g. a

@@ -1,5 +1,8 @@
-# Analyzes and visualizes subalpine data from the University Camp snotel site @ 10,330ft. Figures visualize SWE (max day and mm),  day of last snowmelt, and fraction of melt pre max SWE.
-# Last updated 1/21/2026
+# Analyzes and visualizes subalpine data from the University Camp snotel site 
+# @ 10,330ft. 
+# Figures visualize SWE (max day and mm),  day of last snowmelt, and fraction of melt pre max SWE.
+# Initial code by SCE
+# Revised and updated for the Data Dashboard by Anne Marie Panetta (2026)
 
 # setup
 pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
