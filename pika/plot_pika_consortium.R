@@ -254,8 +254,7 @@ g1 <- ggplot(by.yr.anom) +
     labels = c("1:8", "1:4", "1:2", "1:1", "2:1", "4:1", "8:1"),
     sec.axis = sec_axis(trans = I, breaks = 0, labels = "")
   ) +
-  labs(y = "Pika juvenile:adult ratio", x = "Year", 
-       title = "Pika recruitment anomalies") +
+  labs(y = "Pika juvenile:adult ratio", x = "Year") +
   theme_hc() +
   theme(
     legend.position = "none",
