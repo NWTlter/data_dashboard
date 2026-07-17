@@ -1,23 +1,83 @@
-# plot tree mortality
-# SCE 12 Jan 2023
-#  Credit for basic workflow for downloading/top subsetting/cleaning from
-# C. Bueno de mesquita script 
+# ============================================================================
+# Niwot Ridge LTER Data Dashboard: Subalpine Forest Tree Mortality Figures
+# ============================================================================
+#
+# Purpose:
+#   Reads permanent forest plot census data (tree-level mortality records
+#   across repeated surveys, 1982-2019), calculates annual percent
+#   mortality by species and topographic moisture class, 
+#   and produces two figures:
+#
+#     1. subalpine_tree_mortality.jpg          
+#                 % annual mortality by census period and topographic moisture
+#                 class, for Subalpine Fir (ABLA)and Engelmann Spruce (PIEN)
+#     2. subalpine_tree_mortality_long-term_mean.jpg   
+#                 Same comparison, faceted by species and topographic class,
+#                 colored by direction relative to each species/class's 
+#                 long-term mean mortality rate
+#
+# Input:
+#   data/*.csv  -- permanent forest plot data (EDI knb-lter-nwt.207): plot
+#                  metadata, tree-level census records, and seedling counts.
 
-# -- SETUP -----
-# clean up enviro, read in needed libraries
-rm(list=ls())
-#library(readxl)
+#
+# Output:
+#   Two JPG figures written to plot_dir (see file names above).
+#
+# Notes:
+#   Restricted, per R. Andrus's recommendation, to plots BW3, MRS4, MRS5,
+#   BL6, and MRS7, and to Subalpine Fir (ABLA) and Engelmann Spruce (PIEN)
+#   -- Quaking Aspen (POTR) has too few trees for confidence, and Lodgepole
+#   Pine (PICO) mortality appears largely density-dependent rather than
+#   climate-driven.
+#
+# TODO
+#   - double check the "one alive at end of period" vs "died during period"
+#     mortality accounting logic against the source publication
+#   - revisit whether the 100%-mortality plots (single last tree died) are
+#     handled the way you want -- see mortrates_all / PercAnnMort_adj
+#
+# Original Code and Analysis: Sarah C. Elmendorf(2023), building on an
+#   earlier tree-mortality-by-PC1 workflow by Cliff Bueno de Mesquita, and
+#   on download/subsetting utilities by C. Bueno de Mesquita
+# Revised and Updated for the Data Dashboard by Anne Marie Panetta (2026)
+
+# Data source: Veblen, T., R. Andrus, and R. Chai. 2021. Permanent forest
+#   plot data from 1982-2019 at Niwot Ridge, Colorado ver 5. Environmental
+#   Data Initiative. 
+#   https://doi.org/10.6073/pasta/48fa11a8f5bc6541b0472bc3fd4c0c71
+# ============================================================================
+
+# -- SETUP --------------------------------------------------------------
+
+rm(list = ls())
+
 library(tidyverse)
-#library(vegan)
-options(stringsAsFactors = F)
+library(EDIutils)  # tools for interacting with EDI's data package API
+library(plyr)       # ddply(), used inside summarySE()
+
+options(stringsAsFactors = FALSE)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-source("../utility_functions/utility_functions_all.R")
+
+data_dir <- "data"
+plot_dir <- "plots"
+
+if (!dir.exists(plot_dir)) {
+  dir.create(plot_dir, recursive = TRUE)
+}
+
+# Set to TRUE to (re)download source data from EDI. Only needs to be run
+# once, or when a newer package version is released.
+download_data <- FALSE
 
 
-#cliff function summarySE
+
+# -- HELPER FUNCTION ------------------------------------------------------
+# Summarizes a numeric variable by group: N, mean, sd, standard error, and
+# a confidence interval, in the style of the Cookbook for R's summarySE().
 
 summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
                       conf.interval=.95, .drop=TRUE) {
@@ -29,7 +89,7 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
     else       length(x)
   }
   
-  # This does the summary. For each group's data frame, return a vector with
+  # This does the summary. For each group's data frame, returns a vector with
   # N, mean, and sd
   datac <- ddply(data, groupvars, .drop=.drop,
                  .fun = function(xx, col) {
@@ -58,811 +118,408 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 #TODO 
 
 
-# download data -----------------------------------------------------------
-
-
-# Tree Mortality by PC1
-# 1982 - 2016
-# by Cliff Bueno de Mesquita
-# -- SETUP -----
-# clean up enviro, read in needed libraries
-# rm(list=ls())
-# library(RCurl)
-# script <- getURL("https://raw.githubusercontent.com/cliffbueno/Functions/master/Summary.R", ssl.verifypeer = FALSE)
-# eval(parse(text = script))
-# library(readxl)
-# library(tidyverse)
-# library(vegan)
-# library(naniar)
-# library(FSA)
-# library(plyr)
-# options(stringsAsFactors = F)
-# theme_set(theme_bw())
-# na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
-
-# -- FUNCTIONS -----
-# also just run the whole utilities R code
-# set up functions to read in tabular datasets from EDI dynamically
-# SCE + CTW code to determine most recent version of package ID and read in current dataset on EDI
-#function to determine current version of data package on EDI
-## ----- UTILITY FUNCTIONS ----
-## Need to improve documentation and consider splitting into multiple files?
-findNonNumeric<-function(x){
-  unique(suppressWarnings(x[is.na(as.numeric(x))]))
+# -- DOWNLOAD DATA FROM EDI ---------------------------------------------
+# Note: if you have already downloaded SOME data, read_data_package_archive()
+# will not overwrite existing files. Clear the /data directory first if you
+# need to force a fresh download.
+if (download_data) {
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
+  
+  scope <- "knb-lter-nwt"  # Niwot scope
+  
+  # 207 -- permanent forest plot data (plot metadata, tree census, and
+  # seedling tables), with current citation (update as package version
+  # changes):
+  #   Veblen, T., R. Andrus, and R. Chai. 2021. Permanent forest plot data
+  #   from 1982-2019 at Niwot Ridge, Colorado ver 5. Environmental Data
+  #   Initiative. https://doi.org/10.6073/pasta/48fa11a8f5bc6541b0472bc3fd4c0c71
+  for (id in c("207")) {
+    revision <- list_data_package_revisions(scope, id, filter = "newest")
+    packageID <- paste(scope, id, revision, sep = ".")
+    
+    read_data_package_archive(packageID, path = data_dir)
+    print(read_data_package_citation(packageID)) # confirm the version used
+  }
+  
+  for (fname in list.files(data_dir, pattern = "knb-lter.*zip", 
+                           full.names = TRUE)) {
+    unzip(zipfile = fname, exdir = data_dir)
+  }
+  
+  # After the first download, list what actually landed in data_dir and
+  # update the three file names in READ DATA below to match.
+  print(list.files(data_dir, pattern = "\\.csv$", ignore.case = TRUE))
 }
+# -- READ DATA ------------------------------------------------------------
+# TODO: the package includes three tables (plot metadata, tree-level
+# census records, and seedling counts). Confirm the actual file names in
+# data_dir (see the list.files() call above, or run it manually) and
+# update the three paths below -- these are placeholders.
 
-# #borrowed from metajam
-# tabularize_eml <- function(eml, full = FALSE) {
-#   
-#   if (any(class(eml) == "emld")) {
-#     eml <- eml
-#   } else if (is.character(eml) | is.raw(eml)) {
-#     eml <- emld::as_emld(eml)
-#   } else {
-#     stop("The EML input could not be parsed.")
-#   }
-#   
-#   metadata <- eml %>%
-#     unlist() %>%
-#     tibble::enframe()
-#   
-#   if (full == FALSE) {
-#     metadata <- metadata %>%
-#       dplyr::mutate(name = dplyr::case_when(
-#         grepl("schemaLocation", name) ~ "eml.version",
-#         grepl("title", name) ~ "title",
-#         grepl("individualName", name) ~ "people",
-#         grepl("abstract", name) ~ "abstract",
-#         grepl("keyword", name) ~ "keyword",
-#         grepl("geographicDescription", name) ~ "geographicCoverage.geographicDescription",
-#         grepl("westBoundingCoordinate", name) ~ "geographicCoverage.westBoundingCoordinate",
-#         grepl("eastBoundingCoordinate", name) ~ "geographicCoverage.eastBoundingCoordinate",
-#         grepl("northBoundingCoordinate", name) ~ "geographicCoverage.northBoundingCoordinate",
-#         grepl("southBoundingCoordinate", name) ~ "geographicCoverage.southBoundingCoordinate",
-#         grepl("beginDate", name) ~ "temporalCoverage.beginDate",
-#         grepl("endDate", name) ~ "temporalCoverage.endDate",
-#         grepl("taxonRankValue", name) ~ "taxonomicCoverage",
-#         grepl("methods", name) ~ "methods",
-#         grepl("objectName", name) ~ "objectName",
-#         grepl("online.url", name) ~ "url"
-#       )) %>%
-#       dplyr::filter(!is.na(name)) %>%
-#       dplyr::mutate(value = stringr::str_trim(value)) %>%
-#       dplyr::distinct() %>%
-#       dplyr::group_by(name) %>%
-#       dplyr::summarize(value = paste(value, collapse = "; ")) %>%
-#       dplyr::mutate(value = gsub("\n", "", value)) #without this, fields get truncated in Excel
-#   }
-#   
-#   return(metadata)
-# }
-# 
-# #function to determine current version of data package on EDI
-# getCurrentVersion<-function(edi_id){
-#   require(magrittr)
-#   versions=readLines(paste0('https://pasta.lternet.edu/package/eml/knb-lter-nwt/', edi_id), warn=FALSE)%>%
-#     as.numeric()%>%(max)
-#   packageid=paste0('knb-lter-nwt.', edi_id, '.', versions)
-#   return (packageid)
-# }
-# 
-# #function to download the EML file from EDI
-# getEML<-function(packageid){
-#   require(magrittr)
-#   myurl<-paste0("https://portal.lternet.edu/nis/metadataviewer?packageid=",
-#                 packageid,
-#                 "&contentType=application/xml")
-#   #myeml<-xml2::download_html(myurl)%>%xml2::read_xml()%>%EML::read_eml()
-#   myeml<-xml2::read_xml(paste0("https://portal.lternet.edu/nis/metadataviewer?packageid=",
-#                                packageid,
-#                                "&contentType=application/xml"))%>%EML::read_eml()
-# }
-# 
-# #function to get a single element anywhere in an eml
-# eml_get_simple <- function(x, element, from = "list", ...){
-#   doc <- as.character(emld::as_json(emld::as_emld(x, from = from)))
-#   out <- jqr::jq(doc, paste0("..|.", element, "? // empty"))
-#   json <- jqr::combine(out)
-#   robj <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-#   return(robj)
-# }
-# 
-# #function for plot aesthetics
-# use_theme = function(){ 
-#   theme_bw()+
-#     theme(
-#       #this is size of the font on the panels
-#       strip.text.y = element_text(size = 3),
-#       #yaxis font size
-#       axis.text.y = element_text(size = 4),
-#       #axis.title.y = element_blank(),
-#       axis.text.x=element_text(angle=-90)
-#     )
-# }
-# 
-# # function to determine data package version number only (not return full data package ID)
-# getPackageVersion<-function(edi_id, site = "nwt"){
-#   versions=readLines(paste0('https://pasta.lternet.edu/package/eml/knb-lter-', site, '/', edi_id), warn=FALSE)
-#   currentV <- max(as.numeric(versions))
-#   return(currentV)
-# }
-# 
-# # function to get entity ID for current data package version
-# getEntityId <- function(edi_id, version, site = "nwt", datanum = 1){
-#   entID <- readLines(paste0('https://pasta.lternet.edu/package/eml/knb-lter-', site, '/', edi_id, "/", version, "/"), warn=FALSE)[datanum]
-#   entID <- gsub(paste0("http.*/",edi_id,"/",version,"/"), "", entID) # remove all chars except what comes after last /
-#   return(entID)
-# }
-# 
-# # function to read in tabular csv dataset for data package (could make more generic with read table, but should know what you're reading in to use)
-# getTabular <- function(edi_id, na_vals = c("", "NA", NA, NaN, ".", "NaN", " "), site = "nwt", datanum = 1){
-#   require(readr)
-#   v <- getPackageVersion(edi_id, site = site)
-#   id <- getEntityId(edi_id, v, site = site, datanum = datanum)
-#   dat <- readr::read_csv(paste0("https://portal.edirepository.org/nis/dataviewer?packageid=knb-lter-", site, ".", edi_id, ".", v, 
-#                                 "&entityid=", id),
-#                          trim_ws =TRUE, na = na_vals)
-#   dat <- as.data.frame(dat)
-#   print(paste0("Reading in knb-lter-", site, ".", edi_id, ".", v))
-#   return(dat)
-# }
+PP_plot_data <- read_csv(file.path(data_dir, "PP_plot_data.tv.data.csv"), 
+                         na = na_vals)
+PP_tree_data <- read_csv(file.path(data_dir, "PP_tree_data.tv.data.csv"), 
+                         na = na_vals)
+PP_seedling_data <- read_csv(file.path(data_dir, 
+                            "PP_seedling_data.tv.data.csv"), 
+                             na = na_vals)
 
-# -- GET DATA -----
-# Tom Veblen Tree Dataset
-PP_plot_data <- getTabular(207, datanum = 1)
-PP_tree_data <- getTabular(207, datanum = 2)
-PP_seedling_data <- getTabular(207, datanum = 3)
+# -- PREP PLOT METADATA -----------------------------------------------------
 
-
-# let's just look at the raw and try to remember how this is structured
-
-View (PP_tree_data %>%
-        filter(plot == 'BW3'))
-
-# appears you can only tell for sure what was censused
-# when if there's something that died in that period...
-
-#adding in topographic position from
-#https://www.sciencedirect.com/science/article/pii/S0378112714007476#t0005
-
-extra_plot_info=data.frame(
-  plot=c('BW2', 'BW3','MRS4', 'MRS5', 'BL6', 'MRS7', 'MRS4_gap', 'BL6_gap', 'MRS1','MRS8-9-10', 'MRS1_gap'),
-  topo=c('Xeric', 'Mesic', 'Xeric', 'Hydric', 'Mesic', 'Xeric', 'Xeric/Mesic' , 'Mesic', 'Xeric', 'Xeric/Mesic', 'Xeric'),
-  age= c('old', 'old', 'old', 'old', 'old', 'old', 'old', 'young', 'young', 'young', 'young')
+# Topographic position and stand age for each plot / plot group, from
+# https://www.sciencedirect.com/science/article/pii/S0378112714007476#t0005
+#
+#   Gap plots 6-10 and 12-21 are over a broad area west of near MRS4
+#     (old, xeric/mesic)
+#   Gap plots 11 and 22-30 are near BL6 (old, mesic)
+#   MRS8, 9 & 10 (xeric/mesic, young)
+#   Gap plots 1-5 are in a tight cluster on the north side of the ski
+#     trail north of MRS1 (young, xeric)
+extra_plot_info <- data.frame(
+  plot = c("BW2", "BW3", "MRS4", "MRS5", "BL6", "MRS7", "MRS4_gap", "BL6_gap", 
+           "MRS1", "MRS8-9-10", "MRS1_gap"),
+  topo = c("Xeric", "Mesic", "Xeric", "Hydric", "Mesic", "Xeric", "Xeric/Mesic", 
+           "Mesic", "Xeric", "Xeric/Mesic", "Xeric"),
+  age = c("old", "old", "old", "old", "old", "old", "old", "young", "young", 
+          "young", "young")
 )
 
-# Gap plots 6-10 and 12-21 are over a broad area west of near MRS4 (old, xeric/mesic)
-# Gap plots 11 and 22-30 are near BL6 (old, xeric/mesic) (old, mesic)
-# MRS8, 9 & 10 (xeric/mesic, young)
-# Gap plots 1 through 5 are in a tight cluster on the north side of the ski trail north of MRS1 (young, xeric)
+# Individual "gap" sub-plots are pooled into their parent plot group.
+PP_tree_data <- PP_tree_data %>%
+  dplyr::mutate(plot_group = plot) %>%
+  dplyr::mutate(plot_group = replace(plot_group, plot_group %in% c("Gap1", 
+                            "Gap2", "Gap3", "Gap4", "Gap5"), "MRS1_gap")) %>%
+  dplyr::mutate(plot_group = replace(plot_group, plot_group %in% 
+                              c("MRS8", "MRS9", "MRS10"), "MRS8-9-10")) %>%
+  dplyr::mutate(plot_group = replace(plot_group, plot_group %in% c(
+    "Gap6", "Gap7", "Gap8", "Gap9", "Gap10",
+    "Gap12", "Gap13", "Gap14", "Gap15", "Gap16", 
+    "Gap17", "Gap18", "Gap19", "Gap20", "Gap21"
+  ), "MRS4_gap")) %>%
+  dplyr::mutate(plot_group = replace(plot_group, plot_group %in% c(
+    "Gap11", "Gap22", "Gap23", "Gap24", "Gap25", "Gap26", "Gap27", 
+    "Gap28", "Gap29", "Gap30"
+  ), "BL6_gap")) %>%
+  dplyr::left_join(., PP_plot_data %>% dplyr::select(plot, install_year))
 
-PP_tree_data=PP_tree_data%>%dplyr::mutate(
-  plot_group=plot)%>%
-  dplyr::mutate(
-    plot_group=replace(plot_group, plot_group%in%c('Gap1',  'Gap2',  'Gap3',  'Gap4',  'Gap5'), 'MRS1_gap'))%>%
-  dplyr::mutate(
-    plot_group=replace(plot_group, plot_group%in%c('MRS8',  'MRS9',  'MRS10'), 'MRS8-9-10'))%>%
-  dplyr::mutate(plot_group=replace(plot_group, plot_group%in%c('Gap6',  'Gap7',  'Gap8',  'Gap9',  'Gap10',
-                                                               'Gap12',  'Gap13',  'Gap14',  'Gap15',  'Gap15',
-                                                               'Gap16',  'Gap17',  'Gap18',  'Gap19',  'Gap20', 'Gap21'), 'MRS4_gap'))%>%
-  dplyr::mutate(plot_group=replace(plot_group, plot_group%in%c('Gap11',  'Gap22',  'Gap23',  'Gap24',  'Gap25',
-                                                               'Gap26',  'Gap27',  'Gap28',  'Gap29',  'Gap30'), 'BL6_gap'))%>%
-  dplyr::left_join(., PP_plot_data %>%dplyr::select(plot, install_year))
+# Fill in install years for plot groups not resolved above (from the
+# source publication).
+PP_tree_data$install_year[PP_tree_data$plot_group == "MRS1_gap"] <- 1983
+PP_tree_data$install_year[PP_tree_data$plot_group == "BL6_gap"] <- 1983
+PP_tree_data$install_year[PP_tree_data$plot_group == "MRS4_gap"] <- 1983
 
-#fill in more missing MD from paper
-PP_tree_data$install_year[PP_tree_data$plot_group=='MRS1_gap']=1983
-PP_tree_data$install_year[PP_tree_data$plot_group=='BL6_gap']=1983
-PP_tree_data$install_year[PP_tree_data$plot_group=='MRS4_gap']=1983
+# For trees with no recorded start of their "dead" period (dp_start), but
+# with a recorded end (dp_end) and marked dead, assume the dead period
+# began at plot installation.
+PP_tree_data$dp_start[is.na(PP_tree_data$dp_start) & 
+                        PP_tree_data$dead == 1 & !is.na(PP_tree_data$dp_end)] <-
+  PP_tree_data$install_year[is.na(PP_tree_data$dp_start) 
+                        & PP_tree_data$dead == 1 & !is.na(PP_tree_data$dp_end)]
 
-#start of dead period for things with no dp_start assumed to be the install year
-#probably things with no start AND end to the dp were dead at the initial survey??
+PP_tree_data$duration <- (PP_tree_data$dp_end - PP_tree_data$dp_start) + 1
+
+PP_tree_data$dbhmean <- rowMeans(PP_tree_data[c("dbh1", "dbh3")], na.rm = TRUE)
+
+
+# -- ASSIGN CENSUS-PERIOD STATUS -------------------------------------------
+# For each tree at each census period, assign a status:
+#   a  = alive during this period
+#   d  = died during this period
+#   dp = died in a previous period (still absent/dead in this one)
 #
-PP_tree_data$dp_start[is.na(PP_tree_data$dp_start)&PP_tree_data$dead==1&!is.na(PP_tree_data$dp_end)]=
-  PP_tree_data$install_year[is.na(PP_tree_data$dp_start)&PP_tree_data$dead==1&!is.na(PP_tree_data$dp_end)]
+# Note on mortality accounting: the published data calculated percent
+# mortality based on the number of trees at plot installation, but the
+# more defensible denominator is the number of trees alive at the start
+# of each period -- i.e. mortality = dead / (dead + alive), not
+# dead / alive. This is corrected further down.
 
-PP_tree_data$duration=(PP_tree_data$dp_end-PP_tree_data$dp_start)+1
+PP_tree_data <- PP_tree_data %>% tidyr::unite(., period, dp_start, dp_end, 
+                                              sep = "-")
 
-##First plot height class by measurement year
-num_vars<-PP_tree_data %>%
-  dplyr::select_if(., is.numeric)  %>%
-  names()
+names(PP_tree_data)[2] <- c("tree.")  # rename the tree ID column
 
-PP_tree_data$dbhmean <- rowMeans(PP_tree_data[c('dbh1', 'dbh3')], na.rm=TRUE)
+mortality <- tidyr::expand(PP_tree_data, tidyr::nesting(plot, tree.), period) %>%
+  dplyr::inner_join(., PP_tree_data %>% select(plot, period) %>% distinct())  
+# drop census periods that don't actually exist for a given plot
 
-ggplot(PP_tree_data, aes(x=yrcht, y=dbhmean, group=`spec`))+ geom_point(aes(col=spec))
-
-##Plot percent mortality for each death period and by height class
-PP_tree_data = PP_tree_data%>%tidyr::unite(.,  period, dp_start, dp_end, sep="-" )
-
-#confirmed, one alive at end fo period, 7 died during period
-# so Cliff's mortality calcs need adjusting
-# so that mortality is dead/(dead+alive)
-View (PP_tree_data %>%
-        filter(plot == 'BW2'&spec == 'POTR'))
-#unique (PP_tree_data[,c('plot', 'period')])
-
-#note in the published data, they calculated
-# percent mortality based on the number of trees at plot
-# installation but I think properly it should be done off
-# those at the beginning of the period
-
-#assign a status for all trees at each period
-# dp = died previous period
-# d = died this period
-# a = alive this period
-# There was a problem with the tree. column, rename
-
-
-tst<-tidyr::expand(PP_tree_data, tidyr::nesting(plot, tree.), period)
-
-#so far assumes there was a BW3 census in this period
-View (tst %>%filter(plot == 'BW3' & period == '2014-2016'))
-
-#lots of periods here, seems it has been censussed tons of times!
-unique (PP_tree_data %>% filter(plot == 'BW3') %>%dplyr::pull(period))
-
-
-names(PP_tree_data)[2] <- c("tree.")
-mortality=tidyr::expand(PP_tree_data, tidyr::nesting(plot, tree.), period)%>%
-  dplyr::left_join(., PP_tree_data%>%dplyr::select(plot, tree., spec, period,
-                                                   dead, hc1,biotic_attack, biotic_agent, plot_group)%>%
-                     dplyr::rename(mort_period=period))%>%
+mortality <- mortality %>%
+  dplyr::left_join(., PP_tree_data %>% dplyr::select(
+    plot, tree., spec, period, dead, hc1, biotic_attack, biotic_agent, plot_group
+  ) %>% dplyr::rename(mort_period = period)) %>%
   dplyr::arrange(plot, tree., period)
 
-#this is somewhat weird because there is both 1993-2007 and also 1995-2007
-# how is this possible?
-# does not exist in the raw data but instead is an error in the nesting 
-# statement above.
-
-mortnew=tidyr::expand(PP_tree_data, tidyr::nesting(plot, tree.), period) 
-nrow (mortnew)
-
-#get rid of censuses that don't exist (SCE thinks this is right 
-# but we would need to double check w Robbie!)
-mortnew = mortality %>%
-  inner_join(., PP_tree_data %>%
-               select(plot, period) %>%
-               distinct())
-
-#this then gets rid of a ton of faux tree censuses
-nrow (mortnew)
-
-mortality <- mortnew %>%
-  dplyr::left_join(., PP_tree_data%>%dplyr::select(plot, tree., spec, period,
-                                                   dead, hc1,biotic_attack, biotic_agent, plot_group)%>%
-                     dplyr::rename(mort_period=period))%>%
-  dplyr::arrange(plot, tree., period)
-  
-
-
-# unique (mortality %>% filter(plot == 'BW3') %>%dplyr::pull(period))
-# 
-# View (PP_tree_data %>%
-#         select(plot, period) %>%
-#         distinct() %>%
-#         arrange(plot, period))
-
-
-
-#but, ignoring that for now because the very long intercensus period
-# is dropped anyhow...
-
-mortality$status=NA
-for (i in 1:nrow(mortality)){
-  if (mortality$mort_period[i]=='NA-NA'){
-    mortality$status[i]='a'
-  }else if (mortality$mort_period[i]==mortality$period[i]){
-    mortality$status[i]='d'
-  }else if (mortality$status[i-1]%in%(c('d', 'dp'))&mortality$tree.[i]==mortality$tree.[i-1]){
-    mortality$status[i]='dp'
-  }else{
-    mortality$status[i]='a'
+mortality$status <- NA
+for (i in 1:nrow(mortality)) {
+  if (mortality$mort_period[i] == "NA-NA") {
+    mortality$status[i] <- "a"
+  } else if (mortality$mort_period[i] == mortality$period[i]) {
+    mortality$status[i] <- "d"
+  } else if (mortality$status[i - 1] %in% c("d", "dp") 
+             & mortality$tree.[i] == mortality$tree.[i - 1]) {
+    mortality$status[i] <- "dp"
+  } else {
+    mortality$status[i] <- "a"
   }
 }
 
-#SCE let's back out for the period 2014-2016 and PIEN and BW3, what happened
-# to give a d = NA 
 
-#seems pretty clear that nothing died in this period
-View (mortality %>%
-        filter(spec == 'PIEN'& plot_group == 'BW3'))
-      
-#but not looking better after fixing the mortnew above
-# there is not a fake period in here, continuing w the code...
+# -- MORTALITY RATES: ALL SPECIES POOLED -----------------------------------
 
-
-#summarize percent mortality by plot and period over all species
-mortrates=mortality%>%
-  dplyr::group_by(plot_group, period, status)%>%
-  dplyr::summarise(n=dplyr::n())%>%
-  tidyr::spread(., status, n)%>%
-  dplyr::filter(., !period%in%c('1982-1982', '1983-1983', '1986-1986', '2016-2016', 'NA-NA'))%>%
-  dplyr::left_join(., PP_plot_data, by=c('plot_group'='plot'))
-
-#more from the ms - install years for the groups
-mortrates$install_year[mortrates$plot_group=="BL6_gap"]=1982
-mortrates$install_year[mortrates$plot_group=="MRS4_gap"]=1983
-mortrates$install_year[mortrates$plot_group=="MRS8-9-10"]=1986
-mortrates$install_year[mortrates$plot_group=="MRS1_gap"]=1983
-
-#remove census period prior to install year
-mortrates=mortrates %>%
-  dplyr::filter(!(install_year==1986&period=='1984-1986'))%>%
-  dplyr::left_join(., unique(PP_tree_data[, c('period', 'duration')]))%>%
-  dplyr::left_join(., extra_plot_info, by=c('plot_group'='plot'))%>%
-  dplyr::mutate(perc_mort=d/a)%>%
-  dplyr::mutate(perc_mort_ann=perc_mort/duration)
-
-#calculate mean ext summer over the periods
-# clims=mortrates%>%dplyr::ungroup()%>%
-#   dplyr::select(period)%>%
-#   distinct()%>%
-#   tidyr::separate(., period, into=c('dp_start', 'dp_end'))
-# 
-# clims$mean_ext_summer=NA
-# for (j in 1:nrow (clims)){
-#   clims$mean_ext_summer[j]=mean(extsummer$sumallPC1[extsummer$eco_year>=clims$dp_start[j]&
-#                                                       extsummer$eco_year<=clims$dp_end[j]])
-# }
-# 
-# mortrates=mortrates%>%dplyr::left_join(.,
-#                                        clims%>%tidyr::unite(.,  period, dp_start, dp_end, sep="-" ))
-
-
-topocolor=mortrates%>%
-  ungroup()%>%
-  dplyr::select(plot_group, topo)%>%
-  distinct()%>%
-  dplyr::mutate(
-    color=case_when(
-      topo=='Xeric' ~ 'brown',
-      topo=='Xeric/Mesic' ~ 'olivedrab4',
-      topo=='Mesic' ~ 'green',
-      topo=='Hydric' ~ 'blue'))%>%
+topocolor <- extra_plot_info %>%
+  dplyr::rename(plot_group = plot) %>%
+  dplyr::mutate(color = case_when(
+    topo == "Xeric" ~ "brown",
+    topo == "Xeric/Mesic" ~ "olivedrab4",
+    topo == "Mesic" ~ "green",
+    topo == "Hydric" ~ "blue"
+  )) %>%
   dplyr::arrange(topo)
 
-topocolor=dplyr::bind_rows(
-  topocolor%>%dplyr::filter(topo=='Hydric'),
-  topocolor%>%dplyr::filter(topo=='Mesic'),
-  topocolor%>%dplyr::filter(topo=='Xeric/Mesic'),
-  topocolor%>%dplyr::filter(topo=='Xeric'))
+# Order moisture classes wet to dry, for consistent plot ordering below.
+topocolor <- dplyr::bind_rows(
+  topocolor %>% dplyr::filter(topo == "Hydric"),
+  topocolor %>% dplyr::filter(topo == "Mesic"),
+  topocolor %>% dplyr::filter(topo == "Xeric/Mesic"),
+  topocolor %>% dplyr::filter(topo == "Xeric")
+)
 
-#reorder by moisture
-mortrates$plot_group <- factor(mortrates$plot_group, levels=topocolor$plot_group)
+mortrates <- mortality %>%
+  dplyr::group_by(plot_group, period, status) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
+  tidyr::spread(., status, n) %>%
+  dplyr::filter(., !period %in% c("1982-1982", "1983-1983", "1986-1986", 
+                                  "2016-2016", "NA-NA")) %>%
+  dplyr::left_join(., PP_plot_data, by = c("plot_group" = "plot"))
 
-# Calculate actual percent
-mortrates$PercAnnMort <- mortrates$perc_mort_ann*100
-# Can't use 15 yr periods
-mortrates_sub <- subset(mortrates, duration < 4)
-# Make factor to summarize by
-# mortrates_sub$extsumfact <- as.factor(mortrates_sub$mean_ext_summer)
-# meanmort <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("extsumfact","topo"))
-# meanmort$char <- as.character(meanmort$extsumfact)
-# meanmort$PC1 <- as.numeric(meanmort$char)
+# Install years for plot groups not resolved by the join above.
+mortrates$install_year[mortrates$plot_group == "BL6_gap"] <- 1982
+mortrates$install_year[mortrates$plot_group == "MRS4_gap"] <- 1983
+mortrates$install_year[mortrates$plot_group == "MRS8-9-10"] <- 1986
+mortrates$install_year[mortrates$plot_group == "MRS1_gap"] <- 1983
 
-
-meanmort <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("period","topo"))
-
-
-# Plot by moisture
-ggplot(meanmort, aes(x=period, y=PercAnnMort, colour = topo)) +
-  geom_point(size = 3, alpha = 0.5) +
-  geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  geom_smooth(method = lm, se = F) +
-  labs(x = "period",
-       y = "% Annual Tree Mortality",
-       colour = "Site Type") +
-    theme(legend.position = c(0.14, 0.85),
-          legend.background = element_rect(color = "black"),
-          legend.title = element_text(face="bold", size = 14),
-          legend.text = element_text(size = 12),
-          legend.key.size = unit(1, "line"), 
-          axis.text = element_text(size = 16), 
-          axis.title = element_text(face="bold",size=18))
-
-# # Plot all
-# ggplot(meanmort, aes(x=PC1, y=PercAnnMort)) +
-#   geom_point(size = 3) +
-#   geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0) +
-#   geom_smooth(method = lm, se = F) +
-#   labs(x = "PC1",
-#        y = "% Annual Tree Mortality") +
-#   theme(axis.text = element_text(size = 16), 
-#         axis.title = element_text(face="bold",size=18))
-# 
-# # Regressions on Means
-# hydm <- lm(PercAnnMort ~ PC1, data = subset(meanmort, topo == "Hydric"))
-# summary(hydm) # NS
-# mesm <- lm(PercAnnMort ~ PC1, data = subset(meanmort, topo == "Mesic"))
-# summary(mesm) # NS
-# xerm <- lm(PercAnnMort ~ PC1, data = subset(meanmort, topo == "Xeric"))
-# summary(xerm) # Only two points
-# xemm <- lm(PercAnnMort ~ PC1, data = subset(meanmort, topo == "Xeric/Mesic"))
-# summary(xemm) # NS
-# allm <- lm(PercAnnMort ~ PC1, data = meanmort)
-# summary(allm) # R2 = 0.24, p = 0.056
-# 
-# # Regressions on Whole Data
-# gm <- lm(PercAnnMort ~ topo+mean_ext_summer, data = mortrates_sub)
-# summary(gm) # Topo and PC1 significant
-# hydm1 <- lm(PercAnnMort ~ mean_ext_summer, data = subset(mortrates_sub, topo == "Hydric"))
-# summary(hydm1) # NS
-# mesm1 <- lm(PercAnnMort ~ mean_ext_summer, data = subset(mortrates_sub, topo == "Mesic"))
-# summary(mesm1) # R2 = 0.22, p = 0.056
-# xerm1 <- lm(PercAnnMort ~ mean_ext_summer, data = subset(mortrates_sub, topo == "Xeric"))
-# summary(xerm1) # R2 = 0.31, p = 0.002
-# xemm1 <- lm(PercAnnMort ~ mean_ext_summer, data = subset(mortrates_sub, topo == "Xeric/Mesic"))
-# summary(xemm1) # NS
-# allm1 <- lm(PercAnnMort ~ mean_ext_summer, data = mortrates_sub)
-# summary(allm1) # R2 = 0.15, p = 0.002
-# 
-
-################################## By Species ##############################################
-#summarize percent mortality by plot and period
-mortrates=mortality%>%
-  dplyr::group_by(plot_group, period, status, spec)%>%
-  dplyr::summarise(n=dplyr::n())%>%
-  tidyr::spread(., status, n)%>%
-  dplyr::filter(., !period%in%c('1982-1982', '1983-1983', '1986-1986','2016-2016', 'NA-NA'))%>%
-  dplyr::left_join(., PP_plot_data, by=c('plot_group'='plot'))
-
-
-
-#SCE added this line I am pretty sure if there are a but not d then d is 
-# actually 0 - missing from Cliff's logic so need to double check
-
-View (mortrates %>%
-        filter(is.na(d)))
-
-#sce infilled these w 0
-tst = mortrates %>%
-  mutate(d_ch = ifelse(is.na(d)&!is.na(a), 0, d))
-
-#View (tst %>% select(d_ch, everything())) # seems right?
-
-#so change the d calc to fill in the 0s
 mortrates <- mortrates %>%
-  mutate(d = ifelse(is.na(d)&!is.na(a), 0, d))
+  dplyr::filter(!(install_year == 1986 & period == "1984-1986")) %>% # drop the census period before this plot group existed
+  dplyr::left_join(., unique(PP_tree_data[, c("period", "duration")])) %>%
+  dplyr::left_join(., extra_plot_info, by = c("plot_group" = "plot")) %>%
+  dplyr::mutate(perc_mort = d / a) %>%
+  dplyr::mutate(perc_mort_ann = perc_mort / duration)
 
+mortrates$plot_group <- factor(mortrates$plot_group, 
+                               levels = topocolor$plot_group)
+mortrates$PercAnnMort <- mortrates$perc_mort_ann * 100
 
-#more from the ms - install years for the groups
-mortrates$install_year[mortrates$plot_group=="BL6_gap"]=1982
-mortrates$install_year[mortrates$plot_group=="MRS4_gap"]=1983
-mortrates$install_year[mortrates$plot_group=="MRS8-9-10"]=1986
-mortrates$install_year[mortrates$plot_group=="MRS1_gap"]=1983
-
-#remove census period prior to install year
-mortrates=mortrates %>%
-  dplyr::filter(!(install_year==1986&period=='1984-1986'))%>%
-  dplyr::left_join(., unique(PP_tree_data[, c('period', 'duration')]))%>%
-  dplyr::left_join(., extra_plot_info, by=c('plot_group'='plot'))%>%
-  #sce changed this line I think it is not right
-  #dplyr::mutate(perc_mort=d/a)%>%
-  dplyr::mutate(perc_mort=d/(d+a))%>%
-  dplyr::mutate(perc_mort_ann=perc_mort/duration)
-
-#mortrates=mortrates%>%dplyr::left_join(.,
-#                                       clims%>%tidyr::unite(.,  period, dp_start, dp_end, sep="-" ))
-
-
-#reorder by moisture
-mortrates$plot_group <- factor(mortrates$plot_group, levels=topocolor$plot_group)
-
-# Can't use 15 yr periods
-#mortrates$extsumfact <- as.factor(mortrates$mean_ext_summer)
-mortrates$PercAnnMort <- mortrates$perc_mort_ann*100
+# Long (multi-decade) census intervals aren't comparable to the shorter
+# ones, so exclude them here.
 mortrates_sub <- subset(mortrates, duration < 4)
 
-#sanity test this now looks good
-# mortality rates all less than 0
-# and are also NA if nothing alive
-View (mortrates_sub %>%
-        filter(spec == 'POTR'))
+meanmort <- summarySE(as.data.frame(ungroup(mortrates_sub)), 
+                      measurevar = "PercAnnMort", 
+                      groupvars = c("period", "topo"))
 
-#as we have it we have removed the 100%
-# mortality from a few plots where the single last tree died
-# not sure if this makes sense or not
-View (mortrates %>%
-        filter(is.na(PercAnnMort)))
 
-mortrates_all = mortrates %>%
-  mutate(PercAnnMort_adj = ifelse((is.na(a)&!is.na(d)),
-         1, PercAnnMort))
+# Quick look at mortality by topographic moisture class, all species
+# pooled, before moving to the species-level breakdown used in the
+# dashboard figures.
+ggplot(meanmort, aes(x = period, y = PercAnnMort, colour = topo)) +
+  geom_point(size = 3, alpha = 0.5) +
+  geom_errorbar(aes(ymin = PercAnnMort - se, ymax = PercAnnMort + se), 
+                width = 0, alpha = 0.5) +
+  geom_smooth(method = lm, se = FALSE) +
+  labs(x = "period", y = "% Annual Tree Mortality", colour = "Site Type") +
+  theme(
+    legend.position = c(0.14, 0.85),
+    legend.background = element_rect(color = "black"),
+    legend.title = element_text(face = "bold", size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1, "line"),
+    axis.text = element_text(size = 16),
+    axis.title = element_text(face = "bold", size = 18)
+  )
 
-# View (mortrates_all %>%
-#         filter(is.na(PercAnnMort)))
 
-# Summarize
-#meanmortsp <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("extsumfact","topo","spec"))
-meanmortsp <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("period","topo","spec"))
-#meanmortsp$char <- as.character(meanmortsp$extsumfact)
-#meanmortsp$PC1 <- as.numeric(meanmortsp$char)
+# -- MORTALITY RATES: BY SPECIES -------------------------------------------
+# Same approach as above, but broken out by species and corrected to use
+# dead / (dead + alive) as the mortality denominator, rather than
+# dead / alive.
+
+mortrates <- mortality %>%
+  dplyr::group_by(plot_group, period, status, spec) %>%
+  dplyr::summarise(n = dplyr::n()) %>%
+  tidyr::spread(., status, n) %>%
+  dplyr::filter(., !period %in% c("1982-1982", "1983-1983", "1986-1986", 
+                                  "2016-2016", "NA-NA")) %>%
+  dplyr::left_join(., PP_plot_data, by = c("plot_group" = "plot"))
+
+# If a plot/period/species has alive (a) trees but no dead (d) trees
+# recorded, that means zero died -- fill in explicit 0s rather than NA.
+mortrates <- mortrates %>%
+  dplyr::mutate(d = ifelse(is.na(d) & !is.na(a), 0, d))
+
+mortrates$install_year[mortrates$plot_group == "BL6_gap"] <- 1982
+mortrates$install_year[mortrates$plot_group == "MRS4_gap"] <- 1983
+mortrates$install_year[mortrates$plot_group == "MRS8-9-10"] <- 1986
+mortrates$install_year[mortrates$plot_group == "MRS1_gap"] <- 1983
+
+mortrates <- mortrates %>%
+  dplyr::filter(!(install_year == 1986 & period == "1984-1986")) %>%
+  dplyr::left_join(., unique(PP_tree_data[, c("period", "duration")])) %>%
+  dplyr::left_join(., extra_plot_info, by = c("plot_group" = "plot")) %>%
+  dplyr::mutate(perc_mort = d / (d + a)) %>%
+  dplyr::mutate(perc_mort_ann = perc_mort / duration)
+
+mortrates$plot_group <- factor(mortrates$plot_group, 
+                               levels = topocolor$plot_group)
+mortrates$PercAnnMort <- mortrates$perc_mort_ann * 100
+mortrates_sub <- subset(mortrates, duration < 4)
+
+# A handful of plots have PercAnnMort == NA because nothing was alive at
+# the start of the period (only dead trees recorded) -- these are the
+# "single last tree died" cases and are treated as 100% mortality below.
+mortrates_all <- mortrates %>%
+  mutate(PercAnnMort_adj = ifelse((is.na(a) & !is.na(d)), 1, PercAnnMort))
+
+meanmortsp <- summarySE(as.data.frame(ungroup(mortrates_sub)), 
+                        measurevar = "PercAnnMort", 
+                        groupvars = c("period", "topo", "spec"))
+
+
 meanmortsp <- subset(meanmortsp, PercAnnMort != "NA")
 meanmortsp$spec <- as.factor(meanmortsp$spec)
-levels(meanmortsp$spec)
-table(meanmortsp$spec) # Remove PIFL
-meanmortsp <- subset(meanmortsp, spec != "PIFL")
+meanmortsp <- subset(meanmortsp, spec != "PIFL")  # too few Limber Pine records to summarize reliably
 
-# Plot with moisture color
-facet_names <-  c(`ABLA` = "Subalpine Fir",`PICO` = "Lodgepole Pine",`PIEN` = "Engelmann Spruce",`POTR` = "Quaking Aspen")
+facet_names <- c(
+  `ABLA` = "Subalpine Fir", `PICO` = "Lodgepole Pine",
+  `PIEN` = "Engelmann Spruce", `POTR` = "Quaking Aspen"
+)
 
-
-#something definitely not quite right
-# as there is an aspen plot with >100% mortality?
-# but then again maybe it wa
-ggplot(meanmortsp, aes(x=period, y=PercAnnMort, colour = topo)) +
+# Quick look at mortality by species, all plots, before restricting to
+# the species/plot subset used in the dashboard figures.
+ggplot(meanmortsp, aes(x = period, y = PercAnnMort, colour = topo)) +
   geom_point(size = 3, alpha = 0.5) +
-  geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  #geom_smooth(method = lm, se = F) +
-  labs(x = "period",
-       y = "% Annual Tree Mortality",
-       colour = "Site Type") +
-  facet_wrap(~ spec, scales = "free_y", labeller = as_labeller(facet_names)) +
-  theme(legend.position = "right",
-        legend.background = element_rect(color = "black"),
-        legend.title = element_text(face="bold", size = 14),
-        legend.text = element_text(size = 12),
-        legend.key.size = unit(1, "line"), 
-        axis.text = element_text(size = 16), 
-        axis.title = element_text(face="bold",size=18))
-
-# 
-# View (meanmortsp %>%
-#         filter(spec == 'POTR'))
-
-# # Plot
-# facet_names <-  c(`ABLA` = "Subalpine Fir",`PICO` = "Lodgepole Pine",`PIEN` = "Engelmann Spruce",`POTR` = "Quaking Aspen")
-# ggplot(meanmortsp, aes(x=PC1, y=PercAnnMort, group = spec)) +
-#   geom_point(size = 3) +
-#   geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0) +
-#   geom_smooth(method = lm, se = F) +
-#   labs(x = "PC1",
-#        y = "% Annual Tree Mortality") +
-#   facet_wrap(~ spec, scales = "free_y", labeller = as_labeller(facet_names)) +
-#   theme(axis.text = element_text(size = 16), 
-#         axis.title = element_text(face="bold",size=18),
-#         strip.text = element_text(size = 14))
-# 
-# # Regressions on Means
-# ablam <- lm(PercAnnMort ~ PC1, data = subset(meanmortsp, spec == "ABLA"))
-# summary(ablam) # NS
-# picom <- lm(PercAnnMort ~ PC1, data = subset(meanmortsp, spec == "PICO"))
-# summary(picom) # NS
-# pienm <- lm(PercAnnMort ~ PC1, data = subset(meanmortsp, spec == "PIEN"))
-# summary(pienm) # NS
-# potrm <- lm(PercAnnMort ~ PC1, data = subset(meanmortsp, spec == "POTR"))
-# summary(potrm) # R2 = 0.99, p = 0.048
-# 
-# # Regressions on whole data
-# gm1 <- lm(perc_mort_ann ~ spec+topo+mean_ext_summer, data = mortrates_sub)
-# summary(gm1) # Species significant, moisture and PC1 not.
-# ablam1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "ABLA"))
-# summary(ablam1) # R2 = 0.15, p = 0.02
-# picom1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "PICO"))
-# summary(picom1) # NS
-# pienm1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "PIEN"))
-# summary(pienm1) # NS
-# potrm1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "POTR"))
-# summary(potrm1) # R2 = 0.99, p = 0.048
-# 
-# # Most accurate graph with ABLA and POTR increasing with PC1
-# ggplot(meanmortsp, aes(x=PC1, y=PercAnnMort, colour = spec)) +
-#   geom_point(size = 3, alpha = 0.5) +
-#   geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-#   labs(x = "Extended Summer (PC1 Axis Score)",
-#        y = "% Annual Tree Mortality",
-#        colour = NULL) +
-#   geom_smooth(method = lm, se = F, data = subset(meanmortsp, spec == "ABLA" | spec == "POTR")) +
-#   theme(legend.position = c(0.15,0.75),
-#         legend.background = element_rect(color = "black"),
-#         legend.title = element_blank(),
-#         legend.text = element_text(size = 12),
-#         legend.key.size = unit(2, "line"), 
-#         axis.text = element_text(size = 16), 
-#         axis.title = element_text(face="bold",size=18))
-
-# Cliff's notes
-# Update after talking to Robbie
-# Too few POTR trees to have confidence so remove
-# PICO mortality largely due to density dependence
-# Just look at ABLA and PIEN and in plots were Robbie says climate could play a role instead of density dependence
-# ReSummarize
-# Summarize
-#meanmortsp <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("extsumfact","topo","spec"))
-#meanmortsp <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("period","topo","spec"))
-#meanmortsp$char <- as.character(meanmortsp$extsumfact)
-#meanmortsp$PC1 <- as.numeric(meanmortsp$char)
-# meanmortsp <- subset(meanmortsp, PercAnnMort != "NA")
-# meanmortsp$spec <- as.factor(meanmortsp$spec)
-# levels(meanmortsp$spec)
-# table(meanmortsp$spec) # Remove PIFL
-# meanmortsp <- subset(meanmortsp, spec != "PIFL")
+  geom_errorbar(aes(ymin = PercAnnMort - se, ymax = PercAnnMort + se), 
+                width = 0, alpha = 0.5) +
+  labs(x = "period", y = "% Annual Tree Mortality", colour = "Site Type") +
+  facet_wrap(~spec, scales = "free_y", labeller = as_labeller(facet_names)) +
+  theme(
+    legend.position = "right",
+    legend.background = element_rect(color = "black"),
+    legend.title = element_text(face = "bold", size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(1, "line"),
+    axis.text = element_text(size = 16),
+    axis.title = element_text(face = "bold", size = 18)
+  )
 
 
-# Graph with Robbie recommended Species and Plots
-# SCE note I am unsure why Robbie suggested only these plots
-# I think there are too few aspen and the spruce apparently have density 
-# dependence
-# just following Cliff's notes here
-mortrates_sub <- subset(mortrates_sub,plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")
+# -- RESTRICT TO RECOMMENDED SPECIES/PLOTS -----------------------------------
+# Per R. Andrus: too few Quaking Aspen (POTR) trees for confidence, and
+# Lodgepole Pine (PICO) mortality is largely density-dependent rather than
+# climate-driven, so both are dropped from the dashboard figures. Also
+# restricted to the plots where climate (rather than density dependence)
+# is thought most likely to drive mortality patterns.
 
-#add back in the 100% mortality
-mortrates_sub_all = mortrates_sub  %>%
-  mutate(PercAnnMort_adj = ifelse((is.na(a)&!is.na(d)),
-                                  1, PercAnnMort))
+mortrates_sub <- subset(mortrates_sub, plot_group %in% 
+                          c("BW3", "MRS4", "MRS5", "BL6", "MRS7"))
 
-# meanmortsp <- summarySE(mortrates_sub, measurevar ="PercAnnMort",groupvars=c("period","plot_group","spec"))
-# #meanmortsp$char <- as.character(meanmortsp$extsumfact)
-# #meanmortsp$PC1 <- as.numeric(meanmortsp$char)
-# meanmortsp <- subset(meanmortsp, PercAnnMort != "NA")
-# meanmortsp$spec <- as.factor(meanmortsp$spec)
-# levels(meanmortsp$spec)
-# table(meanmortsp$spec) # Remove PIFL
-# meanmortsp <- subset(meanmortsp, spec == "ABLA" | spec == "PIEN")
-# meanmortsp <- subset(meanmortsp, plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")
-# mortrates_sub <- subset(mortrates_sub,plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")
-# Regressions
-# ablam1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "ABLA"))
-# summary(ablam1) # R2 = 0.23, p = 0.02
-# pienm1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "PIEN"))
-# summary(pienm1) # NS
-# Graph with Robbie recommended Species and Plots
-# Significant line for ABLA
+mortrates_sub_all <- mortrates_sub %>%
+  mutate(PercAnnMort_adj = ifelse((is.na(a) & !is.na(d)), 1, PercAnnMort))
 
-#sce compared this to cliff's figure and seems about like he had intended
-# eg one point per plot per period (with Cliff's axis being extended summer)
-# as that was the framework then
-ggplot(meanmortsp %>%
-         filter(spec %in% c('PIEN', 'ABLA')), aes(x=period, y=PercAnnMort, colour = spec)) +
-  geom_point(size = 3, alpha = 0.5) +
-  geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  #labs(x = "Extended Summer (PC1 Axis Score)",
-  labs(x = "Census period",
-       y = "% Annual Tree Mortality",
-       colour = NULL) +
-  scale_colour_discrete(labels = c("Subalpine Fir","Engelmann Spruce")) +
-  geom_smooth(method = lm, se = F, data = subset(meanmortsp, spec == "ABLA")) +
-  theme(legend.position = c(0.20,0.75),
-        legend.background = element_rect(color = "black"),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 12),
-        legend.key.size = unit(2, "line"), 
-        axis.text = element_text(size = 16), 
-        axis.title = element_text(face="bold",size=18))
+meanmortsp <- summarySE(
+  as.data.frame(ungroup(mortrates_sub %>% 
+                          filter(plot_group %in% c("BW3", "MRS4", "MRS5", "BL6",
+                                                   "MRS7")))),
+  measurevar = "PercAnnMort", groupvars = c("period", "topo", "spec")
+)
 
-
-#sce remaking by hydric/xeric and period
-meanmortsp <- summarySE(mortrates_sub %>%
-                          filter(plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7"), measurevar ="PercAnnMort",groupvars=c("period","topo","spec"))
-#meanmortsp$char <- as.character(meanmortsp$extsumfact)
-#meanmortsp$PC1 <- as.numeric(meanmortsp$char)
 meanmortsp <- subset(meanmortsp, PercAnnMort != "NA")
 meanmortsp$spec <- as.factor(meanmortsp$spec)
-levels(meanmortsp$spec)
-table(meanmortsp$spec) # Remove PIFL
 meanmortsp <- subset(meanmortsp, spec == "ABLA" | spec == "PIEN")
-#meanmortsp <- subset(meanmortsp, plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")
-#mortrates_sub <- subset(mortrates_sub,plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")
-# Regressions
-# ablam1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "ABLA"))
-# summary(ablam1) # R2 = 0.23, p = 0.02
-# pienm1 <- lm(perc_mort_ann ~ mean_ext_summer, data = subset(mortrates_sub, spec == "PIEN"))
-# summary(pienm1) # NS
-# Graph with Robbie recommended Species and Plots
-# Significant line for ABLA
 
 
+# ============================================================================
+# FIGURE 1: % annual mortality by census period and topographic class
+# ============================================================================
+# Subalpine Fir (ABLA) and Engelmann Spruce (PIEN) only, restricted to the
+# plots recommended by R. Andrus. Points show the mean ± SE across plots
+# within a topographic moisture class; the linear trend line is fit to
+# Subalpine Fir only.
 
-#sce compared this to cliff's figure and seems about like he had intended
-# eg one point per plot per period (with Cliff's axis being extended summer)
-# as that was the framework then
-g1<- ggplot(meanmortsp, aes(x=period, y=PercAnnMort, colour = spec)) +
+g1 <- ggplot(meanmortsp, aes(x = period, y = PercAnnMort, colour = spec)) +
   geom_point(size = 3, alpha = 0.5) +
-  geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  #labs(x = "Extended Summer (PC1 Axis Score)",
-  labs(x = "Census period",
-       y = "% Annual Tree Mortality",
-       colour = NULL) +
-  scale_colour_discrete(labels = c("Subalpine Fir","Engelmann Spruce")) +
-  geom_smooth(method = lm, se = F, data = subset(meanmortsp, spec == "ABLA")) +
-  theme(legend.position = c(0.20,0.75),
-        legend.background = element_rect(color = "black"),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 12),
-        legend.key.size = unit(2, "line"), 
-        axis.text = element_text(size = 16), 
-        axis.title = element_text(face="bold",size=18))+
-  facet_wrap(~topo)+
-  theme(axis.text.x=element_text(angle = -90, hjust = 0))
+  geom_errorbar(aes(ymin = PercAnnMort - se, ymax = PercAnnMort + se), 
+                width = 0, alpha = 0.5) +
+  labs(x = "Census period", y = "Annual Tree Mortality (%)", colour = NULL) +
+  scale_colour_discrete(labels = c("Subalpine Fir", "Engelmann Spruce")) +
+  geom_smooth(method = lm, se = FALSE, 
+              data = subset(meanmortsp, spec == "ABLA")) +
+  theme(
+    legend.position = c(0.20, 0.75),
+    legend.background = element_rect(color = "black"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    legend.key.size = unit(2, "line"),
+    axis.text = element_text(size = 16),
+    axis.title = element_text(face = "bold", size = 18),
+    axis.text.x = element_text(angle = -90, hjust = 0)
+  ) +
+  facet_wrap(~topo)
 
-ggsave(g1, file = 'plots/mortality_by_census.jpg', height =4, width =12)
+ggsave(g1, file = file.path(plot_dir, "subalpine_tree_mortality.jpg"), 
+       height = 5, width = 12)
 
 
-#other option, just make a weighted mean over all plots per period by top
-meanmortsp_adj =
-  mortrates_sub_all %>%
-  filter(plot_group == "BW3"|plot_group=="MRS4"|plot_group=="MRS5"|plot_group=="BL6"|plot_group=="MRS7")%>%
-  mutate(ct_a = ifelse(!is.na(a), a, 0),
-         ct_d = ifelse(!is.na(d), d, 0),
-         sum_tree = ct_a+ct_d) %>%
+# ============================================================================
+# FIGURE 2: % annual mortality anomaly by species and topographic moisture class
+# ============================================================================
+# Companion figure to Figure 1: rather than points with error bars, this
+# shows each period's mortality rate as a bar, colored by whether it's
+# above or below that species/moisture class long-term mean --
+# Mortality is weighted by the number of trees alive+dead in that plot/period, 
+# so plots with more trees contribute proportionally more to the average.
+
+meanmortsp_adj <- mortrates_sub_all %>%
+  filter(plot_group %in% c("BW3", "MRS4", "MRS5", "BL6", "MRS7")) %>%
+  mutate(
+    ct_a = ifelse(!is.na(a), a, 0),
+    ct_d = ifelse(!is.na(d), d, 0),
+    sum_tree = ct_a + ct_d
+  ) %>%
   ungroup() %>%
-  filter(sum_tree!=0)%>%
-  dplyr::group_by(topo, spec,period) %>%
-  #dplyr::summarize(PercAnnMort = mean(PercAnnMort_adj))
-  dplyr::summarize(PercAnnMort = weighted.mean(PercAnnMort_adj, sum_tree), .groups = 'drop') %>%
-  tidyr::separate(., col = 'period', into = c('start', 'end'), sep = '-') %>%
-  mutate(start = as.numeric(start), end = as.numeric(end),
-         year = (start+end)/2) %>%
-  filter(spec %in% c('ABLA', 'PIEN')) %>%
+  filter(sum_tree != 0) %>%
+  dplyr::group_by(topo, spec, period) %>%
+  dplyr::summarize(PercAnnMort = weighted.mean(PercAnnMort_adj, sum_tree),
+                   .groups = "drop") %>%
+  tidyr::separate(., col = "period", into = c("start", "end"), sep = "-") %>%
+  mutate(start = as.numeric(start), end = as.numeric(end), 
+         year = (start + end) / 2) %>%
+  filter(spec %in% c("ABLA", "PIEN")) %>%
   dplyr::group_by(spec, topo) %>%
-  dplyr::mutate(mean_mort = mean (PercAnnMort,na.rm = TRUE), .groups = 'drop') %>%
-  mutate(pos_neg = ifelse(PercAnnMort> mean_mort, 'pos', 'neg'))
+  dplyr::mutate(mean_mort = mean(PercAnnMort, na.rm = TRUE), 
+                .groups = "drop") %>%
+  mutate(pos_neg = factor(ifelse(PercAnnMort > mean_mort, "pos", "neg"), 
+                          levels = c("neg", "pos")))
 
 
+facet_names <- c(
+  `ABLA` = "Subalpine Fir", `PICO` = "Lodgepole Pine",
+  `PIEN` = "Engelmann Spruce", `POTR` = "Quaking Aspen",
+  `Hydric` = "Hydric", `Mesic` = "Mesic", `Xeric` = "Xeric"
+)
 
-g2<- ggplot(meanmortsp, aes(x=period, y=PercAnnMort, colour = spec)) +
-  geom_col()+
-  #geom_point(size = 3, alpha = 0.5) +
-  #geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  #labs(x = "Extended Summer (PC1 Axis Score)",
-  labs(x = "Census period",
-       y = "% Annual Tree Mortality",
-       colour = NULL) +
-  #scale_colour_discrete(labels = c("Subalpine Fir","Engelmann Spruce")) +
-  theme(legend.position = c(0.20,0.75),
-        legend.background = element_rect(color = "black"),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 12),
-        legend.key.size = unit(2, "line"), 
-        axis.text = element_text(size = 16), 
-        axis.title = element_text(face="bold",size=18))+
-  facet_grid(spec~topo)+
-  theme(axis.text.x=element_text(angle = -90, hjust = 0))
-
-
-
-# Plot with moisture color
-facet_names <-  c(`ABLA` = "Subalpine Fir",
-                  `PICO` = "Lodgepole Pine",
-                  `PIEN` = "Engelmann Spruce",
-                  `POTR` = "Quaking Aspen",
-                  `Hydric` = "Hydric",
-                  `Mesic` = "Mesic",
-                  `Xeric` = "Xeric")
-
-g3<- ggplot(meanmortsp_adj %>%
-              filter(spec %in% c('ABLA', 'PIEN')), aes(x=year, y=PercAnnMort, fill = pos_neg)) +
-  geom_col()+
-  #geom_point(size = 3, alpha = 0.5) +
-  #geom_errorbar(aes(ymin=PercAnnMort-se,ymax=PercAnnMort+se),width=0,alpha = 0.5) +
-  #labs(x = "Extended Summer (PC1 Axis Score)",
-  labs(x = "Census period",
-       y = "% Annual Tree Mortality",
-       colour = NULL) +
+g2 <- ggplot(
+  meanmortsp_adj %>% filter(spec %in% c("ABLA", "PIEN")),
+  aes(x = year, y = PercAnnMort, fill = pos_neg)
+) +
+  geom_col() +
+  labs(x = "Census period", y = "Annual Tree Mortality (%)", colour = NULL) +
   scale_fill_manual(values = c("green4", "chocolate4")) +
-  #scale_colour_discrete(labels = c("Subalpine Fir","Engelmann Spruce")) +
-  # theme(legend.position = c(0.20,0.75),
-  #       legend.background = element_rect(color = "black"),
-  #       legend.title = element_blank(),
-  #       legend.text = element_text(size = 12),
-  #       legend.key.size = unit(2, "line"), 
-  #       axis.text = element_text(size = 16), 
-  #       axis.title = element_text(face="bold",size=18))+
-  facet_grid(spec~topo, labeller = as_labeller(facet_names))+
+  facet_grid(spec ~ topo, labeller = as_labeller(facet_names)) +
   theme(legend.position = "none")
-  
 
-
-ggsave(g3, file = 'plots/mortality_by_census_by_spp.jpg', height =8, width =10,
-       scale = 0.5)
-
-
-
-
-  
-
-
-
-measurevar ="PercAnnMort",groupvars=c("period","topo","spec"))
-
+ggsave(g2,
+       file = file.path(plot_dir, "subalpine_tree_mortality_long-term_mean.jpg"),
+       height = 8, width = 10, scale = 0.5
+)
 
