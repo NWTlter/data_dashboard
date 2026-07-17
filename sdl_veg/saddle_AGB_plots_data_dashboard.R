@@ -15,7 +15,16 @@
 # Output:
 #   One PNG figure written to figures_dir (see file name above).
 #
-#
+## Notes:
+#   NPP was recorded directly in the "NPP" column through 2022. For
+#   2023-2025, NPP is often NA but recoverable from harvested_NPP or
+#   estimated_cushion_NPP (method-specific columns) -- see the coalesce()
+#   step in the FIGURE section below. Even after recovery, 2023-2025 rest
+#   on a smaller effective sample than earlier years, since a meaningful
+#   fraction of rows in those years have no value in any of the three
+#   columns. Worth confirming whether NPP reconciliation for 2023-2025 
+#   is still pending.
+
 # Credits: 
 #   Sarah C. Elmendorf (2022) developed this script based on a download/
 #   subsetting workflow by M. Oldfather (nwt_8-renewal/get_saddle_sp_CNM.R)
@@ -36,11 +45,12 @@ options(stringsAsFactors = FALSE)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
 
-# Anchor working directory to this script's location. Note: this only
-# works in an interactive RStudio session with the script saved and the
-# active/focused tab -- if you hit "cannot open file" errors downstream,
-# check getwd() and consider hardcoding this path instead.
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# Anchor working directory to this script's project folder. Hardcoded
+# rather than using rstudioapi::getActiveDocumentContext() -- that approach
+# proved unreliable across this project's scripts (fails outside an
+# interactive, saved, focused-tab RStudio session). Update this path if
+# the project folder is ever moved or cloned elsewhere.
+setwd("/Users/lter/Documents/GitHub/NWT LTER Data Dashboard/sdl_veg")
 
 data_dir <- "data"
 figures_dir <- "figures"
@@ -95,7 +105,11 @@ if (download_data) {
 # title and other dashboard scripts' naming conventions.
 
 sdlprod <- read.csv(file.path(data_dir, "saddgrid_npp.hh.data.csv"), na.strings = na_vals)
-
+sdlprod %>% filter(year %in% c(2023, 2024, 2025)) %>% count(year, is.na(NPP))
+sdlprod %>% 
+  filter(year %in% c(2023, 2024, 2025), is.na(NPP)) %>% 
+  select(year, grid_pt, veg_class, NPP, harvested_NPP, estimated_cushion_NPP) %>%
+  head(20)
 
 # ============================================================================
 # FIGURE: Aboveground biomass (ANPP) anomaly
@@ -104,12 +118,30 @@ sdlprod <- read.csv(file.path(data_dir, "saddgrid_npp.hh.data.csv"), na.strings 
 # long-term mean. Grid points are averaged first (across the n=2 subsamples
 # collected per point), then years are averaged across grid points.
 
+# NPP was recorded directly in the "NPP" column through 2022. Starting in
+# 2023, that reconciliation step appears to have stopped -- for 2023-2025,
+# many rows have NPP == NA but a value in harvested_NPP or
+# estimated_cushion_NPP instead (the method-specific columns used when a
+# plot is destructively harvested vs. estimated for cushion plants).
+# coalesce() recovers those values; na.rm = TRUE then averages over
+# whatever's left. This is a no-op for years before 2020, where NPP was
+# always complete.
+#
+# Caveat: a meaningful fraction of 2023-2025 rows have NO value in any of
+# the three columns (not just NPP) -- confirmed via EDI package version
+# knb-lter-nwt.16.10, where ~20-45% of rows in these years have nothing
+# recorded in NPP, harvested_NPP, or estimated_cushion_NPP. So even after
+# this fix, the 2023-2025 bars rest on a smaller effective sample than
+# earlier years. Worth confirming with the data provider whether NPP
+# reconciliation for 2023-2025 is still pending on their end.
+
 npp_by_year <- sdlprod %>%
+  mutate(NPP_combined = coalesce(NPP, harvested_NPP, estimated_cushion_NPP)) %>%
   group_by(year, grid_pt) %>%
-  summarise(NPP = mean(NPP)) %>%
+  summarise(NPP = mean(NPP_combined, na.rm = TRUE)) %>%
   ungroup() %>%
   group_by(year) %>%
-  summarise(NPP = mean(NPP)) %>%
+  summarise(NPP = mean(NPP, na.rm = TRUE)) %>%
   ungroup() %>%
   mutate(
     avgNPP = mean(NPP, na.rm = TRUE),
@@ -118,11 +150,20 @@ npp_by_year <- sdlprod %>%
       factor(c("pos", "neg"))
   )
 
+# Exclude any year that still has no usable NPP value after the coalesce()
+# above (e.g. a field season with nothing recorded in any of the three
+# source columns).
+npp_by_year <- npp_by_year %>% filter(!is.na(anom_NPP))
+
+# Match the row label's font to the left axis title's actual size
+# (theme_hc()'s axis.title.y, in pt); geom_text() size is in mm, hence /.pt.
+axis_title_size <- calc_element("axis.title.y", theme_hc())$size / .pt
+
 x_range_npp <- range(npp_by_year$year, na.rm = TRUE)
 
 row_label_npp <- data.frame(
   x = x_range_npp[2] + diff(x_range_npp) * 0.1,
-  y = 0,
+  y = 0.02 * diff(range(npp_by_year$anom_NPP, na.rm = TRUE)),  # small upward nudge to visually center on 0
   label = "more~biomass  %<->%  less~biomass"
 )
 
@@ -141,7 +182,7 @@ g1 <- ggplot(npp_by_year, aes(x = year, y = anom_NPP)) +
   geom_text(
     data = row_label_npp,
     aes(x = x, y = y, label = label),
-    angle = -90, hjust = 0.5, vjust = 0.5, size = 2.5,
+    angle = -90, hjust = 0.5, vjust = 0.5, size = axis_title_size,
     inherit.aes = FALSE, parse = TRUE
   ) +
   theme_hc() +
