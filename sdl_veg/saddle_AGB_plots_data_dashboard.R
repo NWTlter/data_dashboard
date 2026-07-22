@@ -23,10 +23,9 @@
 #   at all. These we estimate based on that year's plot-specific NDVI 
 
 # Credits: 
-#   Sarah C. Elmendorf (2022) developed this script based on a download/
-#   subsetting workflow by M. Oldfather (nwt_8-renewal/get_saddle_sp_CNM.R)
+#   Sarah C. Elmendorf and Claude for the ndvi prediction and first draft
 #   Anne Marie Panetta (2026) updated and revised this script for the 
-#   data dashboard 
+#   data dashboard for figure aesthetics, 
 # ============================================================================
 
 # -- SETUP --------------------------------------------------------------
