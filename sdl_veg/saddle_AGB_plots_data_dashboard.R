@@ -19,11 +19,8 @@
 #   NPP was recorded directly in the "NPP" column through 2022. For
 #   2023-2025, NPP is often NA but recoverable from harvested_NPP or
 #   estimated_cushion_NPP (method-specific columns) -- see the coalesce()
-#   step in the FIGURE section below. Even after recovery, 2023-2025 rest
-#   on a smaller effective sample than earlier years, since a meaningful
-#   fraction of rows in those years have no value in any of the three
-#   columns. Worth confirming whether NPP reconciliation for 2023-2025 
-#   is still pending.
+#   step in the FIGURE section below. In 2023 - 2025 some plots not harvested
+#   at all. These we estimate based on that year's plot-specific NDVI 
 
 # Credits: 
 #   Sarah C. Elmendorf (2022) developed this script based on a download/
@@ -45,12 +42,8 @@ options(stringsAsFactors = FALSE)
 theme_set(theme_bw())
 na_vals <- c(" ", "", NA, NaN, "NA", "NaN", ".")
 
-# Anchor working directory to this script's project folder. Hardcoded
-# rather than using rstudioapi::getActiveDocumentContext() -- that approach
-# proved unreliable across this project's scripts (fails outside an
-# interactive, saved, focused-tab RStudio session). Update this path if
-# the project folder is ever moved or cloned elsewhere.
-setwd("/Users/lter/Documents/GitHub/NWT LTER Data Dashboard/sdl_veg")
+# Anchor working directory to the sdl_veg script's folder
+setwd(file.path (here::here(), 'sdl_veg'))
 
 data_dir <- "data"
 figures_dir <- "figures"
@@ -59,9 +52,13 @@ if (!dir.exists(figures_dir)) {
   dir.create(figures_dir, recursive = TRUE)
 }
 
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+
 # Set to TRUE to (re)download source data from EDI. Only needs to be run
 # once, or when a newer package version is released.
-download_data <- FALSE
+download_data <- TRUE
 
 
 # -- DOWNLOAD DATA FROM EDI ---------------------------------------------
@@ -111,6 +108,8 @@ sdlprod %>%
   select(year, grid_pt, veg_class, NPP, harvested_NPP, estimated_cushion_NPP) %>%
   head(20)
 
+ndvi <- read.csv(file.path(data_dir, 'saddgrid_ndvi.js.data.csv'))
+
 # ============================================================================
 # FIGURE: Aboveground biomass (ANPP) anomaly
 # ============================================================================
@@ -118,28 +117,39 @@ sdlprod %>%
 # long-term mean. Grid points are averaged first (across the n=2 subsamples
 # collected per point), then years are averaged across grid points.
 
-# NPP was recorded directly in the "NPP" column through 2022. Starting in
-# 2023, that reconciliation step appears to have stopped -- for 2023-2025,
-# many rows have NPP == NA but a value in harvested_NPP or
-# estimated_cushion_NPP instead (the method-specific columns used when a
-# plot is destructively harvested vs. estimated for cushion plants).
-# coalesce() recovers those values; na.rm = TRUE then averages over
-# whatever's left. This is a no-op for years before 2020, where NPP was
-# always complete.
-#
-# Caveat: a meaningful fraction of 2023-2025 rows have NO value in any of
-# the three columns (not just NPP) -- confirmed via EDI package version
-# knb-lter-nwt.16.10, where ~20-45% of rows in these years have nothing
-# recorded in NPP, harvested_NPP, or estimated_cushion_NPP. So even after
-# this fix, the 2023-2025 bars rest on a smaller effective sample than
-# earlier years. Worth confirming with the data provider whether NPP
-# reconciliation for 2023-2025 is still pending on their end.
-
 npp_by_year <- sdlprod %>%
-  mutate(NPP_combined = coalesce(NPP, harvested_NPP, estimated_cushion_NPP)) %>%
+  mutate(NPP_combined = case_when(
+    !is.na(estimated_cushion_NPP) ~ (harvested_NPP + estimated_cushion_NPP),
+    TRUE ~ harvested_NPP)
+  ) %>%
+  mutate(NPP_combined = coalesce(NPP, NPP_combined)) %>%
   group_by(year, grid_pt) %>%
   summarise(NPP = mean(NPP_combined, na.rm = TRUE)) %>%
-  ungroup() %>%
+  ungroup()
+
+
+ndvi_NPP_calibration <- ndvi %>%
+  group_by(year, grid_pt, veg_class) %>%
+  summarise(NDVI = mean(NDVI, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(NDVI)) %>%
+  left_join(., npp_by_year, by = c("year", "grid_pt"))
+
+# consider whether a year-specific calibration is more appropriate
+# for now fit a single mod for all yrs
+poly_mod <- lm(NPP ~ 0 + NDVI + I(NDVI^2), data = ndvi_NPP_calibration)
+ndvi_NPP_calibration$pred_NPP <- predict(poly_mod, newdata = ndvi_NPP_calibration)
+
+
+#join back to the empirical clipped NDVI dataset
+
+# sanity check
+# ggplot (ndvi_NPP_calibration, aes(x = NDVI, y = NPP)) +
+#   geom_point() +
+#   geom_line(aes(y = pred_NPP), color = "blue") +
+#   labs(x = "NDVI", y = "NPP (g/m2)") +
+#   theme_bw()
+
+npp_by_year <- npp_by_year %>% 
   group_by(year) %>%
   summarise(NPP = mean(NPP, na.rm = TRUE)) %>%
   ungroup() %>%
@@ -189,7 +199,7 @@ g1 <- ggplot(npp_by_year, aes(x = year, y = anom_NPP)) +
   theme(
     legend.position = "none",
     axis.line.x = element_line(color = "black"),
-    plot.margin = margin(t = 5.5, r = 25, b = 5.5, l = 5.5)  # extra right margin for the row label
+    plot.margin = margin(t = 5.5, r = 45, b = 5.5, l = 5.5)  # extra right margin for the row label
   ) +
   coord_cartesian(xlim = x_range_npp, clip = "off")
 
