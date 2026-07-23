@@ -2,7 +2,7 @@
 # ============================================================================
 # Niwot Ridge LTER Data Dashboard: Snow Depth Figures
 # ============================================================================
-# Initial code developed by Sarah C. Elmemdorf (2023)
+# Initial code developed by Sarah C. Elmendorf (2023)
 # Code revised and updated for the data dashboard by Anne Marie Panetta (2026)
 
 # Purpose:
@@ -21,8 +21,8 @@
 #
 # TODO
 #   - improve gap-filling for censored (e.g. >300cm) data
-#   - check whether data sampling/coverage is temporally consistent for
-#     May, or whether we want to pick a different month
+#   - Data sampling/coverage is not temporally consistent for any month
+#   - including May, so will need to do some modeling to de-bias
 #   - think about making better use of the full time series
 #
 # Original analysis: Sarah C. Elmendorf, 11 Jan 2023
@@ -92,16 +92,6 @@ if (download_data) {
 snowdata <- read_csv(file.path(data_dir, "saddsnow.dw.data.csv"))
 
 # -- CLEAN DATA -----------------------------------------------------------
-
-# It looks like a handful of measurements were skipped in a few years, but
-# depth was 0 in that grid point both before and after, so we assume it
-# was still 0 on the skipped date.
-snowdata <- snowdata %>%
-  mutate(
-    mean_depth = ifelse(date == "2000-06-09" & point_ID == 301, 0, mean_depth),
-    mean_depth = ifelse(date == "1998-01-09" & point_ID == 10, 0, mean_depth),
-    mean_depth = ifelse(date == "1998-05-18" & point_ID == 401, 0, mean_depth)
-  )
 
 # Sampling seasons are often highly non-overlapping in date across years.
 snowdata <- snowdata %>%
@@ -183,57 +173,6 @@ probs <- probs %>%
 # View(probs)  # looked ok on inspection
 
 
-# -- GAP-FILL CENSORED (210+/300+) DEPTH VALUES ----------------------------
-# Some measurements are truncated at the pole length ("210+" or "300+"
-# cm) rather than an exact depth. Fill these with the mean depth recorded
-# at the same grid point within +/-15 days, restricted to other
-# measurements that were also above the same threshold and greater than
-# the next sample's depth (all such cases appear, on inspection, to be
-# during the melt-down phase, so filling toward the higher/earlier end
-# is appropriate here).
-#
-# Safe to ignore coercion warnings from as.numeric() on the "+"-suffixed
-# strings below -- that's expected, not a data problem.
-
-snowdata$fillval <- NA
-for (i in 1:nrow(snowdata)) {
-  if (snowdata$mean_depth[i] %in% c("210+", "300+") & !is.na(snowdata$mean_depth[i])) {
-    mindoy <- snowdata$doy[i] - 15
-    maxdoy <- snowdata$doy[i] + 15
-    mypoint <- snowdata$point_ID[i]
-    
-    if (snowdata$mean_depth[i] == "210+" & !is.na(snowdata$mean_depth[i])) {
-      fill_data <- snowdata %>%
-        filter(doy > mindoy & doy < maxdoy & point_ID == snowdata$point_ID[i] & as.numeric(mean_depth) > 210)
-    }
-    if (snowdata$mean_depth[i] == "300+" & !is.na(snowdata$mean_depth[i])) {
-      fill_data <- snowdata %>%
-        filter(doy > mindoy & doy < maxdoy & point_ID == snowdata$point_ID[i] & as.numeric(mean_depth) > 300)
-    }
-    next_sample <- snowdata %>%
-      filter(point_ID == snowdata$point_ID[i] & year == snowdata$year[i] & doy > snowdata$doy[i])
-    next_sample <- next_sample %>%
-      filter(doy == min(next_sample$doy))
-    
-    # All such cases, based on inspection, are in the melt-down phase when
-    # this measurement was missed -- fill toward the higher/earlier bound.
-    fill_data <- fill_data %>%
-      filter(as.numeric(mean_depth) > as.numeric(next_sample$mean_depth))
-    snowdata$fillval[i] <- mean(as.numeric(fill_data$mean_depth), na.rm = TRUE)
-  }
-}
-
-# Spot-check the fill values against the original censored records.
-probs <- snowdata[grepl("\\+", snowdata$mean_depth), ] %>%
-  select(year, point_ID) %>%
-  distinct()
-
-probs <- probs %>%
-  left_join(., snowdata) %>%
-  select(year, doy, point_ID, mean_depth, fillval) %>%
-  arrange(year, point_ID, doy)
-
-# View(probs)  # looked ok on inspection
 
 
 # ============================================================================
@@ -248,12 +187,14 @@ snow_anom <- snowdata %>%
                 date = lubridate::ymd(date),
                 month = lubridate::month(date),
                 year = lubridate::year(date),
+                doy = lubridate::yday(date),
                 mean_depth = ifelse(grepl("\\+", mean_depth), fillval, mean_depth),
                 mean_depth = as.numeric(as.character(mean_depth))
   ) %>%
   filter(month == 5) %>%
   group_by(year) %>%
-  summarise(snowdepth = mean(mean_depth, na.rm = TRUE)) %>%
+  summarise(snowdepth = mean(mean_depth, na.rm = TRUE),
+            doy = mean(doy[!is.na(mean_depth)])) %>%
   ungroup() %>%
   mutate(
     avg_depth = mean(snowdepth),
