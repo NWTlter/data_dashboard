@@ -52,7 +52,7 @@ if (!dir.exists(figures_dir)) {
 
 # Set to TRUE to (re)download source data from EDI. Only needs to be run
 # once, or when a newer package version is released.
-download_data <- FALSE
+download_data <- TRUE
 
 # -- DOWNLOAD DATA FROM EDI ---------------------------------------------
 # Note: if you have already downloaded SOME data, read_data_package_archive()
@@ -63,7 +63,12 @@ if (download_data) {
   if (!dir.exists(data_dir)) {
     dir.create(data_dir, recursive = TRUE)
   }
-  
+
+  # Authenticate with EDI using an API key stored as an environment
+  # variable (e.g. via .Renviron locally, or a GitHub Actions secret in
+  # CI). Never hardcode the key here.
+  EDIutils::login(key = Sys.getenv("EDI_API_KEY"))
+
   scope <- "knb-lter-nwt"  # Niwot scope
   
   # Discharge/chemistry inputs used, with current citations (update as
