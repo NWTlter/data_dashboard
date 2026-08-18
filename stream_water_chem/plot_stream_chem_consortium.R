@@ -6,7 +6,12 @@
 #   Reads September stream water sulfate chemistry data from four Niwot
 #   Ridge sites and produces:
 #
-#     1. sulfate_anom_sept.png     September sulfate anomaly, by site
+#     1. sulfate_conc_sept.png   September sulfate concentration (native
+#                                 units, ueq/L), by site
+#     2. sulfate_anom_sept.png   September sulfate anomaly, as absolute
+#                                 difference from each site's long-term
+#                                 September mean (native units, ueq/L --
+#                                 not % change), by site
 #
 # Input:
 #   data/albisolu.nc.data.csv   -- Albion
@@ -15,7 +20,7 @@
 #   data/ariksolu.nc.data.csv   -- Arikaree
 #
 # Output:
-#   PNG figure written to figures_dir (see file name above).
+#   Two PNG figures written to figures_dir (see file names above).
 #
 # Notes:
 #   See the nwt-8 long-term trends repo for a flow-normalized workflow, if
@@ -196,11 +201,12 @@ flag_vals <- datafile %>%
 sites_used <- c("ALBION", "GREEN LAKE 4", "GREEN LAKE 5 ROCK GLACIER", "ARIKAREE")
 
 # ============================================================================
-# FIGURE 1: September sulfate anomaly, by site
+# FIGURE 1: September sulfate concentration (native units), by site
 # ============================================================================
 # Late-season (September) sulfate is used here as an indicator of
-# late-summer sulfur flux; anomalies are percent difference from each
-# site's long-term September mean.
+# late-summer sulfur flux; concentrations are plotted in their native
+# units (ueq/L), with each site's long-term September mean shown as a
+# reference line.
 
 chem_by_month <- datafile %>%
   mutate(
@@ -221,20 +227,57 @@ chem_by_month <- datafile %>%
   )
 
 
-anom_chem_month <- chem_by_month %>%
+sulfate_sept <- chem_by_month %>%
   filter(month == 9 & local_site %in% sites_used) %>%
   group_by(local_site) %>%
   mutate(
-    mean_S = mean(sulfate, .groups = "drop")
+    mean_S = mean(sulfate, na.rm = TRUE)
   ) %>%
   mutate(
-    anom_S = sulfate * 100 / mean_S - 100,
-    posneg = ifelse(anom_S > 0, "pos", "neg") %>%
+    anom_S_abs = sulfate - mean_S,
+    posneg = ifelse(anom_S_abs > 0, "pos", "neg") %>%
       factor(c("pos", "neg"))
   ) %>%
   ungroup()
 
-x_range_S <- range(anom_chem_month$year, na.rm = TRUE)
+x_range_S <- range(sulfate_sept$year, na.rm = TRUE)
+
+sulfate_y_label <- expression(SO[4]^{"2-"} ~ "(" * mu * "Eq " * L^-1 * "; September)")
+
+g1 <- ggplot(sulfate_sept, aes(x = year, y = sulfate)) +
+  geom_col(fill = "#8C2F12") +
+  labs(y = sulfate_y_label, x = "Year") +
+  scale_x_continuous(
+    breaks = seq(
+      10 * floor(min(sulfate_sept$year) / 10),
+      10 * ceiling(max(sulfate_sept$year) / 10),
+      by = 10
+    ),
+    minor_breaks = seq(
+      5 * floor(min(sulfate_sept$year) / 5),
+      5 * ceiling(max(sulfate_sept$year) / 5),
+      by = 5
+    ),
+    guide = guide_axis(minor.ticks = TRUE)
+  ) +
+  theme_hc() +
+  facet_wrap(~local_site, scales = "free_y") +
+  theme(
+    legend.position = "none",
+    axis.minor.ticks.length = rel(0.5)
+  )
+
+ggsave(g1,
+       file = file.path(figures_dir, "sulfate_conc_sept.png"),
+       scale = 0.5, width = 15, height = 6
+)
+
+# ============================================================================
+# FIGURE 2: September sulfate anomaly (absolute, native units), by site
+# ============================================================================
+# Same underlying data as Figure 1, but expressed as the absolute
+# difference from each site's long-term September mean (ueq/L), rather
+# than a percent change.
 
 row_labels_S <- data.frame(
   # facet_wrap sorts alphabetically: row 1 = Albion, Arikaree; row 2 =
@@ -242,28 +285,42 @@ row_labels_S <- data.frame(
   # rightmost facet.
   local_site = c("ARIKAREE", "GREEN LAKE 5 ROCK GLACIER"),
   x = x_range_S[2] + diff(x_range_S) * 0.1,
-  y = 0.03 * diff(range(anom_chem_month$anom_S, na.rm = TRUE)),  # small upward nudge to visually center on 0
+  y = 0,  # each facet's y-scale is symmetric around 0, so center the label vertically
   label = "more~sulfate  %<->%  less~sulfate"
 )
 
-g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
+# scale_y_continuous(limits = symmetric_limits) only computes one global
+# symmetric range -- with free_y facets we instead need each site
+# individually centered on 0, so supply per-site +/- limits via an
+# invisible geom_blank() layer (one row per site, at its own max
+# absolute anomaly).
+symmetric_limits_by_site <- sulfate_sept %>%
+  group_by(local_site) %>%
+  summarise(max_abs = max(abs(anom_S_abs), na.rm = TRUE), .groups = "drop") %>%
+  tidyr::crossing(sign = c(-1, 1)) %>%
+  mutate(anom_S_abs = max_abs * sign)
+
+g2 <- ggplot(sulfate_sept, aes(x = year, y = anom_S_abs)) +
   geom_col(aes(fill = posneg)) +
+  geom_blank(data = symmetric_limits_by_site, aes(y = anom_S_abs), inherit.aes = FALSE) +
   scale_fill_manual(values = c("#8C2F12", "#F5DDB0")) +
-  labs(y = "September sulfate anomaly \n (% difference from long-term mean)", x = "Year") +
+  labs(
+    y = expression(atop("September sulfate anomaly (" * mu * "Eq " * L^-1 * ")", "difference from long-term mean")),
+    x = "Year"
+  ) +
   scale_x_continuous(
     breaks = seq(
-      10 * floor(min(anom_chem_month$year) / 10),
-      10 * ceiling(max(anom_chem_month$year) / 10),
+      10 * floor(min(sulfate_sept$year) / 10),
+      10 * ceiling(max(sulfate_sept$year) / 10),
       by = 10
     ),
     minor_breaks = seq(
-      5 * floor(min(anom_chem_month$year) / 5),
-      5 * ceiling(max(anom_chem_month$year) / 5),
+      5 * floor(min(sulfate_sept$year) / 5),
+      5 * ceiling(max(sulfate_sept$year) / 5),
       by = 5
     ),
     guide = guide_axis(minor.ticks = TRUE)
   ) +
-  scale_y_continuous(limits = symmetric_limits) +
   geom_text(
     data = row_labels_S,
     aes(x = x, y = y, label = label),
@@ -271,7 +328,7 @@ g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
     inherit.aes = FALSE, parse = TRUE
   ) +
   theme_hc() +
-  facet_wrap(~local_site) +
+  facet_wrap(~local_site, scales = "free_y") +
   theme(
     legend.position = "none",
     axis.minor.ticks.length = rel(0.5),
@@ -279,7 +336,7 @@ g1 <- ggplot(anom_chem_month, aes(x = year, y = anom_S)) +
   ) +
   coord_cartesian(xlim = x_range_S, clip = "off")
 
-ggsave(g1,
+ggsave(g2,
        file = file.path(figures_dir, "sulfate_anom_sept.png"),
        scale = 0.5, width = 15, height = 6
 )
